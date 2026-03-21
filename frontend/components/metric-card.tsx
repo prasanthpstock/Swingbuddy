@@ -1,0 +1,1 @@
+export function MetricCard({ title, value, subtitle }: { title: string; value: string; subtitle?: string }) { return (<div className="card"><p className="subtle">{title}</p><div className="mt-2 metric">{value}</div>{subtitle ? <p className="mt-2 subtle">{subtitle}</p> : null}</div>); }

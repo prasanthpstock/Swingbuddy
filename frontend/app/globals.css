@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+body { @apply bg-slate-50 text-slate-900; }
+.card { @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm; }
+.metric { @apply text-2xl font-semibold; }
+.subtle { @apply text-sm text-slate-500; }
+.badge { @apply inline-flex rounded-full px-2.5 py-1 text-xs font-medium; }
+.badge-green { @apply badge bg-emerald-50 text-emerald-700; }
+.badge-amber { @apply badge bg-amber-50 text-amber-700; }
+.badge-red { @apply badge bg-rose-50 text-rose-700; }
+.badge-blue { @apply badge bg-blue-50 text-blue-700; }

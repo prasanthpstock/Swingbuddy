@@ -1,0 +1,3 @@
+"use client";
+import { startZerodhaAuth } from "@/lib/api";
+export default function BrokersPage() { async function connectZerodha() { const result = await startZerodhaAuth(); if (result.login_url) window.location.href = result.login_url; } return (<div className="space-y-4"><div className="card"><h3 className="text-lg font-semibold">Broker Connections</h3><p className="mt-2 subtle">Connect Zerodha first. Upstox and ICICI come next.</p></div><div className="card flex items-center justify-between"><div><h4 className="font-semibold">Zerodha</h4><p className="subtle">Broker auth and holdings sync</p></div><button onClick={connectZerodha} className="rounded-xl bg-slate-900 px-4 py-2 text-white">Connect Zerodha</button></div></div>); }
