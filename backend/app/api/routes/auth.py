@@ -13,8 +13,7 @@ router = APIRouter()
 @router.get("/broker/zerodha/start")
 def start_zerodha_auth(user_id: str = Depends(get_current_user_id)) -> dict:
     adapter = ZerodhaAdapter()
-    login_url = f"{adapter.create_login_url()}&state={user_id}"
-    return {"broker": "zerodha", "login_url": login_url}
+    return {"broker": "zerodha", "login_url": adapter.create_login_url()}
 
 
 @router.get("/broker/zerodha/callback")
