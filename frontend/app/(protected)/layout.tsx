@@ -17,15 +17,28 @@ export default function ProtectedLayout({
 
   useEffect(() => {
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      router.push("/login");
+      return;
+    }
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session && pathname !== "/login") {
-        router.push("/login");
-      } else {
+    async function checkSession() {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error || !data.session) {
+          router.push("/login");
+          return;
+        }
+
         setReady(true);
+      } catch (err) {
+        console.error("Session check failed", err);
+        router.push("/login");
       }
-    });
+    }
+
+    checkSession();
   }, [pathname, router]);
 
   if (!ready) {
