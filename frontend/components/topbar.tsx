@@ -7,11 +7,11 @@ export function Topbar() {
   const [email, setEmail] = useState("");
 
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
-
     async function loadUser() {
       try {
+        const supabase = getSupabaseClient();
+        if (!supabase) return;
+
         const { data } = await supabase.auth.getSession();
         setEmail(data.session?.user?.email || "");
       } catch (err) {
