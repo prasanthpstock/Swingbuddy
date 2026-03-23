@@ -58,3 +58,14 @@ def zerodha_callback(request_token: str = Query(...)) -> RedirectResponse:
             url=f"{settings.frontend_url}/brokers?status=error&message={str(exc)}",
             status_code=302,
         )
+
+@router.get("/broker-connections")
+def get_broker_connections(user_id: str = Depends(get_current_user_id)) -> list[dict]:
+    response = (
+        get_supabase_admin()
+        .table("broker_connections")
+        .select("*")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return response.data or []
