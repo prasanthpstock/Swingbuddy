@@ -10,9 +10,16 @@ export function Topbar() {
     const supabase = getSupabaseClient();
     if (!supabase) return;
 
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email || "");
-    });
+    async function loadUser() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        setEmail(data.session?.user?.email || "");
+      } catch (err) {
+        console.error("Failed to load session user", err);
+      }
+    }
+
+    loadUser();
   }, []);
 
   return (
