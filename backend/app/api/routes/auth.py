@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
+from app.api.deps import get_current_user_id
 from app.brokers.zerodha import ZerodhaAdapter
 from app.core.config import settings
 from app.core.security import encrypt_text
@@ -10,36 +11,32 @@ router = APIRouter()
 
 
 @router.get("/broker/zerodha/start")
-def start_zerodha_auth():
+def start_zerodha_auth(user_id: str = Depends(get_current_user_id)) -> dict:
     adapter = ZerodhaAdapter()
-    login_url = adapter.create_login_url()
-    return {"login_url": login_url}
+    login_url = f"{adapter.create_login_url()}&state={user_id}"
+    return {"broker": "zerodha", "login_url": login_url}
 
 
 @router.get("/broker/zerodha/callback")
 def zerodha_callback(
-    request: Request,
     request_token: str = Query(...),
-):
+    state: str | None = Query(default=None),
+) -> RedirectResponse:
     try:
+        if not state:
+            raise HTTPException(status_code=400, detail="Missing state")
+
         adapter = ZerodhaAdapter()
         session = adapter.create_session(request_token=request_token)
-
         access_token = session["access_token"]
-
-        supabase = get_supabase_admin()
-
-        # 🔥 TEMP FIX: get latest user (since single-user app)
-        users = supabase.auth.admin.list_users()
-        user = users.users[-1]   # latest created user
 
         encrypted = encrypt_text(access_token, settings.encryption_key)
 
-        supabase.table("broker_connections").upsert(
+        get_supabase_admin().table("broker_connections").upsert(
             {
-                "user_id": user.id,
+                "user_id": state,
                 "broker_name": "zerodha",
-                "account_label": "Primary",
+                "account_label": "Primary Zerodha",
                 "access_token_encrypted": encrypted,
                 "status": "active",
             },
@@ -47,10 +44,12 @@ def zerodha_callback(
         ).execute()
 
         return RedirectResponse(
-            url=f"{settings.frontend_url}/brokers?status=connected"
+            url=f"{settings.frontend_url}/brokers?status=connected",
+            status_code=302,
         )
 
-    except Exception as e:
+    except Exception as exc:
         return RedirectResponse(
-            url=f"{settings.frontend_url}/brokers?status=error&message={str(e)}"
+            url=f"{settings.frontend_url}/brokers?status=error&message={str(exc)}",
+            status_code=302,
         )
