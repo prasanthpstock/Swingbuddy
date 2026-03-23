@@ -16,14 +16,15 @@ export default function ProtectedLayout({
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      router.push("/login");
-      return;
-    }
-
     async function checkSession() {
       try {
+        const supabase = getSupabaseClient();
+
+        if (!supabase) {
+          router.push("/login");
+          return;
+        }
+
         const { data, error } = await supabase.auth.getSession();
 
         if (error || !data.session) {
