@@ -18,23 +18,24 @@ def start_zerodha_auth(user_id: str = Depends(get_current_user_id)) -> dict:
 
 
 @router.get("/broker/zerodha/callback")
-def zerodha_callback(
-    request_token: str = Query(...),
-    state: str | None = Query(default=None),
-) -> RedirectResponse:
+def zerodha_callback(request_token: str = Query(...)) -> RedirectResponse:
     try:
-        if not state:
-            raise HTTPException(status_code=400, detail="Missing state")
-
         adapter = ZerodhaAdapter()
         session = adapter.create_session(request_token=request_token)
         access_token = session["access_token"]
 
+        supabase = get_supabase_admin()
+        users = supabase.auth.admin.list_users()
+
+        if not users.users:
+            raise Exception("No Supabase user found")
+
+        user_id = users.users[-1].id
         encrypted = encrypt_text(access_token, settings.encryption_key)
 
-        get_supabase_admin().table("broker_connections").upsert(
+        supabase.table("broker_connections").upsert(
             {
-                "user_id": state,
+                "user_id": user_id,
                 "broker_name": "zerodha",
                 "account_label": "Primary Zerodha",
                 "access_token_encrypted": encrypted,
