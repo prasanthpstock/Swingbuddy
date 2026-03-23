@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import get_current_user_id
@@ -26,10 +26,15 @@ def zerodha_callback(request_token: str = Query(...)) -> RedirectResponse:
         supabase = get_supabase_admin()
         users = supabase.auth.admin.list_users()
 
-        if not users.users:
+        # Handle either list response or object-with-users response
+        user_list = users if isinstance(users, list) else getattr(users, "users", [])
+
+        if not user_list:
             raise Exception("No Supabase user found")
 
-        user_id = users.users[-1].id
+        user = user_list[-1]
+        user_id = user["id"] if isinstance(user, dict) else user.id
+
         encrypted = encrypt_text(access_token, settings.encryption_key)
 
         supabase.table("broker_connections").upsert(
