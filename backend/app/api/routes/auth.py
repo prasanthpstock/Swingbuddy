@@ -1,74 +1,134 @@
-import urllib.parse
+"use client";
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse
+import { useEffect, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
 
-from app.api.deps import get_current_user_id
-from app.brokers.zerodha import ZerodhaAdapter
-from app.core.config import settings
-from app.core.security import encrypt_text
-from app.core.supabase import get_supabase_admin
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
-router = APIRouter()
+export default function PortfolioPage() {
+  const [summary, setSummary] = useState<any>(null);
+  const [holdings, setHoldings] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
 
+  async function getToken() {
+    const supabase = getSupabaseClient();
+    if (!supabase) return "";
 
-@router.get("/broker/zerodha/start")
-def start_zerodha_auth(user_id: str = Depends(get_current_user_id)) -> dict:
-    adapter = ZerodhaAdapter()
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || "";
+  }
 
-    redirect_params = urllib.parse.quote(f"user_id={user_id}", safe="")
-    login_url = f"{adapter.create_login_url()}&redirect_params={redirect_params}"
+  async function loadPortfolio() {
+    const token = await getToken();
+    if (!token) return;
 
-    return {"broker": "zerodha", "login_url": login_url}
+    const [summaryRes, holdingsRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/portfolio/summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }),
+      fetch(`${API_BASE_URL}/portfolio/holdings`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }),
+    ]);
 
+    const summaryData = await summaryRes.json();
+    const holdingsData = await holdingsRes.json();
 
-@router.get("/broker/zerodha/callback")
-def zerodha_callback(
-    request_token: str = Query(...),
-    user_id: str | None = Query(default=None),
-    action: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-) -> RedirectResponse:
-    try:
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Missing user_id")
+    setSummary(summaryData);
+    setHoldings(Array.isArray(holdingsData) ? holdingsData : []);
+  }
 
-        adapter = ZerodhaAdapter()
-        session = adapter.create_session(request_token=request_token)
-        access_token = session["access_token"]
+  async function syncHoldings() {
+    try {
+      setSyncing(true);
+      const token = await getToken();
+      if (!token) return;
 
-        encrypted = encrypt_text(access_token, settings.encryption_key)
+      await fetch(`${API_BASE_URL}/portfolio/sync`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-        get_supabase_admin().table("broker_connections").upsert(
-            {
-                "user_id": user_id,
-                "broker_name": "zerodha",
-                "account_label": "Primary Zerodha",
-                "access_token_encrypted": encrypted,
-                "status": "active",
-            },
-            on_conflict="user_id,broker_name",
-        ).execute()
+      await loadPortfolio();
+    } finally {
+      setSyncing(false);
+    }
+  }
 
-        return RedirectResponse(
-            url=f"{settings.frontend_url}/brokers?status=connected",
-            status_code=302,
-        )
+  useEffect(() => {
+    loadPortfolio();
+  }, []);
 
-    except Exception as exc:
-        return RedirectResponse(
-            url=f"{settings.frontend_url}/brokers?status=error&message={urllib.parse.quote(str(exc))}",
-            status_code=302,
-        )
+  return (
+    <div className="space-y-6">
+      <div className="card flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Portfolio Overview</h3>
+          <p className="mt-2 subtle">Live holdings synced from Zerodha.</p>
+        </div>
 
+        <button
+          onClick={syncHoldings}
+          className="rounded-xl bg-slate-900 px-4 py-2 text-white"
+        >
+          {syncing ? "Syncing..." : "Sync Holdings"}
+        </button>
+      </div>
 
-@router.get("/broker-connections")
-def get_broker_connections(user_id: str = Depends(get_current_user_id)) -> list[dict]:
-    response = (
-        get_supabase_admin()
-        .table("broker_connections")
-        .select("*")
-        .eq("user_id", user_id)
-        .execute()
-    )
-    return response.data or []
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="card">
+          <p className="subtle">Portfolio Value</p>
+          <div className="metric mt-2">₹{summary?.total_portfolio_value ?? 0}</div>
+        </div>
+        <div className="card">
+          <p className="subtle">Total P&amp;L</p>
+          <div className="metric mt-2">₹{summary?.total_pnl ?? 0}</div>
+        </div>
+        <div className="card">
+          <p className="subtle">Open Positions</p>
+          <div className="metric mt-2">{summary?.open_positions ?? 0}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 className="text-lg font-semibold">Holdings</h3>
+
+        <div className="mt-4 overflow-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="pb-3">Symbol</th>
+                <th className="pb-3">Qty</th>
+                <th className="pb-3">Avg Price</th>
+                <th className="pb-3">LTP</th>
+                <th className="pb-3">Market Value</th>
+                <th className="pb-3">P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {holdings.map((item) => (
+                <tr key={item.id} className="border-t border-slate-200">
+                  <td className="py-3">{item.symbol}</td>
+                  <td className="py-3">{item.quantity}</td>
+                  <td className="py-3">₹{item.avg_price}</td>
+                  <td className="py-3">₹{item.ltp}</td>
+                  <td className="py-3">₹{item.market_value}</td>
+                  <td className="py-3">₹{item.pnl}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {holdings.length === 0 ? (
+            <p className="subtle mt-4">No holdings synced yet.</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
