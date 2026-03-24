@@ -1,4 +1,4 @@
-import secrets
+import urllib.parse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -15,47 +15,23 @@ router = APIRouter()
 @router.get("/broker/zerodha/start")
 def start_zerodha_auth(user_id: str = Depends(get_current_user_id)) -> dict:
     adapter = ZerodhaAdapter()
-    supabase = get_supabase_admin()
 
-    state = secrets.token_urlsafe(24)
+    redirect_params = urllib.parse.quote(f"user_id={user_id}", safe="")
+    login_url = f"{adapter.create_login_url()}&redirect_params={redirect_params}"
 
-    supabase.table("broker_auth_sessions").insert(
-        {
-            "user_id": user_id,
-            "broker_name": "zerodha",
-            "state": state,
-        }
-    ).execute()
-
-    login_url = f"{adapter.create_login_url()}&state={state}"
     return {"broker": "zerodha", "login_url": login_url}
 
 
 @router.get("/broker/zerodha/callback")
 def zerodha_callback(
     request_token: str = Query(...),
-    state: str | None = Query(default=None),
+    user_id: str | None = Query(default=None),
+    action: str | None = Query(default=None),
+    status: str | None = Query(default=None),
 ) -> RedirectResponse:
     try:
-        if not state:
-            raise HTTPException(status_code=400, detail="Missing state")
-
-        supabase = get_supabase_admin()
-
-        session_rows = (
-            supabase.table("broker_auth_sessions")
-            .select("*")
-            .eq("state", state)
-            .eq("broker_name", "zerodha")
-            .limit(1)
-            .execute()
-        ).data or []
-
-        if not session_rows:
-            raise Exception("Broker auth session not found")
-
-        auth_session = session_rows[0]
-        user_id = auth_session["user_id"]
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Missing user_id")
 
         adapter = ZerodhaAdapter()
         session = adapter.create_session(request_token=request_token)
@@ -63,7 +39,7 @@ def zerodha_callback(
 
         encrypted = encrypt_text(access_token, settings.encryption_key)
 
-        supabase.table("broker_connections").upsert(
+        get_supabase_admin().table("broker_connections").upsert(
             {
                 "user_id": user_id,
                 "broker_name": "zerodha",
@@ -74,8 +50,6 @@ def zerodha_callback(
             on_conflict="user_id,broker_name",
         ).execute()
 
-        supabase.table("broker_auth_sessions").delete().eq("state", state).execute()
-
         return RedirectResponse(
             url=f"{settings.frontend_url}/brokers?status=connected",
             status_code=302,
@@ -83,7 +57,7 @@ def zerodha_callback(
 
     except Exception as exc:
         return RedirectResponse(
-            url=f"{settings.frontend_url}/brokers?status=error&message={str(exc)}",
+            url=f"{settings.frontend_url}/brokers?status=error&message={urllib.parse.quote(str(exc))}",
             status_code=302,
         )
 
