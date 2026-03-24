@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Query
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import get_current_user_id
@@ -13,27 +15,51 @@ router = APIRouter()
 @router.get("/broker/zerodha/start")
 def start_zerodha_auth(user_id: str = Depends(get_current_user_id)) -> dict:
     adapter = ZerodhaAdapter()
-    return {"broker": "zerodha", "login_url": adapter.create_login_url()}
+    supabase = get_supabase_admin()
+
+    state = secrets.token_urlsafe(24)
+
+    supabase.table("broker_auth_sessions").insert(
+        {
+            "user_id": user_id,
+            "broker_name": "zerodha",
+            "state": state,
+        }
+    ).execute()
+
+    login_url = f"{adapter.create_login_url()}&state={state}"
+    return {"broker": "zerodha", "login_url": login_url}
 
 
 @router.get("/broker/zerodha/callback")
-def zerodha_callback(request_token: str = Query(...)) -> RedirectResponse:
+def zerodha_callback(
+    request_token: str = Query(...),
+    state: str | None = Query(default=None),
+) -> RedirectResponse:
     try:
+        if not state:
+            raise HTTPException(status_code=400, detail="Missing state")
+
+        supabase = get_supabase_admin()
+
+        session_rows = (
+            supabase.table("broker_auth_sessions")
+            .select("*")
+            .eq("state", state)
+            .eq("broker_name", "zerodha")
+            .limit(1)
+            .execute()
+        ).data or []
+
+        if not session_rows:
+            raise Exception("Broker auth session not found")
+
+        auth_session = session_rows[0]
+        user_id = auth_session["user_id"]
+
         adapter = ZerodhaAdapter()
         session = adapter.create_session(request_token=request_token)
         access_token = session["access_token"]
-
-        supabase = get_supabase_admin()
-        users = supabase.auth.admin.list_users()
-
-        # Handle either list response or object-with-users response
-        user_list = users if isinstance(users, list) else getattr(users, "users", [])
-
-        if not user_list:
-            raise Exception("No Supabase user found")
-
-        user = user_list[-1]
-        user_id = user["id"] if isinstance(user, dict) else user.id
 
         encrypted = encrypt_text(access_token, settings.encryption_key)
 
@@ -48,6 +74,8 @@ def zerodha_callback(request_token: str = Query(...)) -> RedirectResponse:
             on_conflict="user_id,broker_name",
         ).execute()
 
+        supabase.table("broker_auth_sessions").delete().eq("state", state).execute()
+
         return RedirectResponse(
             url=f"{settings.frontend_url}/brokers?status=connected",
             status_code=302,
@@ -58,6 +86,7 @@ def zerodha_callback(request_token: str = Query(...)) -> RedirectResponse:
             url=f"{settings.frontend_url}/brokers?status=error&message={str(exc)}",
             status_code=302,
         )
+
 
 @router.get("/broker-connections")
 def get_broker_connections(user_id: str = Depends(get_current_user_id)) -> list[dict]:
