@@ -9,6 +9,7 @@ def get_signals_for_user(user_id: str) -> list[dict]:
         .table("signals")
         .select("*")
         .eq("user_id", user_id)
+        .eq("strategy", "pnl_v1")
         .order("created_at", desc=True)
         .limit(100)
         .execute()
