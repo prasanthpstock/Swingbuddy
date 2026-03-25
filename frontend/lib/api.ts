@@ -58,3 +58,13 @@ export async function startZerodhaAuth() {
     cache: "no-store",
   }).then((r) => r.json());
 }
+
+export async function syncPortfolio() {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/portfolio/sync`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) throw new Error("Failed to sync portfolio");
+  return res.json();
+}
