@@ -64,6 +64,7 @@ def generate_signals_for_user(user_id: str) -> dict:
 
     inserted = 0
     skipped = 0
+    errors: list[dict] = []
 
     for item in holdings:
         symbol = item.get("symbol")
@@ -83,15 +84,36 @@ def generate_signals_for_user(user_id: str) -> dict:
         }
 
         try:
-            (
-                supabase.table("signals")
-                .insert(row)
-                .execute()
-            )
-            inserted += 1
-        except Exception:
-            # Most likely duplicate for same user/symbol/strategy/day
-            skipped += 1
+            response = supabase.table("signals").insert(row).execute()
+
+            # If execute succeeded but no row came back, still count as inserted cautiously
+            if response.data is not None:
+                inserted += 1
+            else:
+                inserted += 1
+
+        except Exception as e:
+            message = str(e)
+
+            # Only count real duplicate-key conflicts as skipped
+            if "duplicate key" in message.lower() or "uq_signals_user_symbol_strategy_day" in message:
+                skipped += 1
+            else:
+                errors.append(
+                    {
+                        "symbol": symbol,
+                        "error": message,
+                    }
+                )
+
+    if errors:
+        return {
+            "status": "error",
+            "message": "Some signals failed to insert.",
+            "inserted": inserted,
+            "skipped": skipped,
+            "errors": errors,
+        }
 
     return {
         "status": "success",
