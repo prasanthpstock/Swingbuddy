@@ -7,7 +7,7 @@ from app.services.holdings_sync import sync_holdings_for_user
 router = APIRouter()
 
 
-def _get_latest_snapshot_id(user_id: str) -> str | None:
+def _get_latest_snapshot(user_id: str) -> dict | None:
     response = (
         get_supabase_admin()
         .table("portfolio_snapshots")
@@ -22,19 +22,23 @@ def _get_latest_snapshot_id(user_id: str) -> str | None:
     if not rows:
         return None
 
-    return rows[0]["id"]
+    return rows[0]
 
 
 @router.get("/summary")
 def get_portfolio_summary(user_id: str = Depends(get_current_user_id)) -> dict:
-    snapshot_id = _get_latest_snapshot_id(user_id)
+    latest_snapshot = _get_latest_snapshot(user_id)
 
-    if not snapshot_id:
+    if not latest_snapshot:
         return {
             "total_portfolio_value": 0,
             "total_pnl": 0,
             "open_positions": 0,
+            "snapshot_id": None,
+            "synced_at": None,
         }
+
+    snapshot_id = latest_snapshot["id"]
 
     rows = (
         get_supabase_admin()
@@ -55,15 +59,19 @@ def get_portfolio_summary(user_id: str = Depends(get_current_user_id)) -> dict:
         "total_portfolio_value": round(total_value, 2),
         "total_pnl": round(total_pnl, 2),
         "open_positions": open_positions,
+        "snapshot_id": snapshot_id,
+        "synced_at": latest_snapshot.get("synced_at"),
     }
 
 
 @router.get("/holdings")
 def get_holdings(user_id: str = Depends(get_current_user_id)) -> list[dict]:
-    snapshot_id = _get_latest_snapshot_id(user_id)
+    latest_snapshot = _get_latest_snapshot(user_id)
 
-    if not snapshot_id:
+    if not latest_snapshot:
         return []
+
+    snapshot_id = latest_snapshot["id"]
 
     response = (
         get_supabase_admin()
