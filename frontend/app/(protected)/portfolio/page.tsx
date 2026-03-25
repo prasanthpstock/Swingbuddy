@@ -27,7 +27,7 @@ export default function PortfolioPage() {
       await loadSummary();     // refresh summary
     } catch (err) {
       console.error("Sync failed", err);
-      alert("Sync failed. Please try again.");
+      alert(err?.message || "Sync failed. Please try again.");
     } finally {
       setLoading(false);
     }
