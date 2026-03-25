@@ -48,12 +48,19 @@ const handleGenerate = async () => {
     await loadSignals();
 
     if (result?.status === "success") {
-      alert(
-        `Signals generated.\nInserted: ${result.inserted ?? 0}\nSkipped: ${result.skipped ?? 0}`
-      );
-    } else {
-      alert(result?.message || "Signal generation did not complete.");
+      if ((result.inserted ?? 0) > 0) {
+        alert(`✅ ${result.inserted} new signals generated`);
+      } else {
+        alert(`ℹ️ Signals already generated for today\nSkipped: ${result.skipped ?? 0}`);
+      }
+      return;
     }
+
+    const detailedErrors = Array.isArray(result?.errors)
+      ? result.errors.map((e: any) => `${e.symbol}: ${e.error}`).join("\n\n")
+      : null;
+
+    alert(detailedErrors || result?.message || "Signal generation failed.");
   } catch (err: any) {
     console.error("Failed to generate signals", err);
     alert(err?.message || "Failed to generate signals.");
