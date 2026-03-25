@@ -1,85 +1,129 @@
-import { getSupabaseClient } from "@/lib/supabase";
+"use client";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL!;
+import { useEffect, useState } from "react";
+import {
+  getPortfolioSummary,
+  getPortfolioHoldings,
+  syncPortfolio,
+} from "@/lib/api";
 
-async function getAuthHeaders() {
-  const supabase = getSupabaseClient();
+export default function PortfolioPage() {
+  const [summary, setSummary] = useState<any>(null);
+  const [holdings, setHoldings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  if (!supabase) {
-    throw new Error("Supabase client not available");
-  }
+  const loadPortfolio = async () => {
+    try {
+      const [summaryData, holdingsData] = await Promise.all([
+        getPortfolioSummary(),
+        getPortfolioHoldings(),
+      ]);
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error("No active session found");
-  }
-
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${session.access_token}`,
+      setSummary(summaryData);
+      setHoldings(Array.isArray(holdingsData) ? holdingsData : []);
+    } catch (err) {
+      console.error("Failed to load portfolio", err);
+    }
   };
-}
 
-async function apiGet(path: string) {
-  const headers = await getAuthHeaders();
+  useEffect(() => {
+    loadPortfolio();
+  }, []);
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: "GET",
-    headers,
-  });
+  const handleSync = async () => {
+    setLoading(true);
+    try {
+      await syncPortfolio();
+      await loadPortfolio();
+    } catch (err: any) {
+      console.error("Sync failed", err);
+      alert(err?.message || "Sync failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`GET ${path} failed: ${text}`);
-  }
+  return (
+    <div className="space-y-6">
+      <div className="card flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Portfolio Overview</h3>
+          <p className="mt-2 subtle">Latest snapshot of your holdings.</p>
+        </div>
 
-  return res.json();
-}
+        <button
+          onClick={handleSync}
+          disabled={loading}
+          className={`px-4 py-2 rounded text-white ${
+            loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+          }`}
+        >
+          {loading ? "Syncing..." : "Sync Holdings"}
+        </button>
+      </div>
 
-async function apiPost(path: string, body?: unknown) {
-  const headers = await getAuthHeaders();
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="card">
+          <p className="subtle">Portfolio Value</p>
+          <div className="metric mt-2">
+            ₹{summary?.total_portfolio_value ?? 0}
+          </div>
+        </div>
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+        <div className="card">
+          <p className="subtle">Total P&amp;L</p>
+          <div className="metric mt-2">
+            ₹{summary?.total_pnl ?? 0}
+          </div>
+        </div>
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`POST ${path} failed: ${text}`);
-  }
+        <div className="card">
+          <p className="subtle">Open Positions</p>
+          <div className="metric mt-2">
+            {summary?.open_positions ?? 0}
+          </div>
+        </div>
+      </div>
 
-  return res.json();
-}
+      <div className="card">
+        <h3 className="text-lg font-semibold">Holdings</h3>
 
-export async function getPortfolioSummary() {
-  return apiGet("/portfolio/summary");
-}
+        <div className="mt-4 overflow-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="pb-3">Symbol</th>
+                <th className="pb-3">Exchange</th>
+                <th className="pb-3">Quantity</th>
+                <th className="pb-3">Avg Price</th>
+                <th className="pb-3">LTP</th>
+                <th className="pb-3">Market Value</th>
+                <th className="pb-3">P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {holdings.map((item, index) => (
+                <tr
+                  key={`${item.snapshot_id}-${item.symbol}-${item.exchange}-${index}`}
+                  className="border-t border-slate-200"
+                >
+                  <td className="py-3">{item.symbol}</td>
+                  <td className="py-3">{item.exchange}</td>
+                  <td className="py-3">{item.quantity}</td>
+                  <td className="py-3">₹{item.avg_price ?? 0}</td>
+                  <td className="py-3">₹{item.ltp ?? 0}</td>
+                  <td className="py-3">₹{item.market_value ?? 0}</td>
+                  <td className="py-3">₹{item.pnl ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-export async function syncPortfolio() {
-  return apiPost("/portfolio/sync");
-}
-
-export async function getAlerts() {
-  return apiGet("/alerts");
-}
-
-export async function getSignals() {
-  return apiGet("/signals");
-}
-
-export async function getLogs() {
-  return apiGet("/logs");
-}
-
-export async function getPortfolioHoldings() {
-  return apiGet("/portfolio/holdings");
-}
-
-export async function startZerodhaAuth() {
-  return apiGet("/auth/broker/zerodha/start");
+          {holdings.length === 0 ? (
+            <p className="subtle mt-4">No holdings found.</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
