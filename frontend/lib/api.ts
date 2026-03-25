@@ -76,6 +76,10 @@ export async function getLogs() {
   return apiGet("/logs");
 }
 
+export async function getPortfolioHoldings() {
+  return apiGet("/portfolio/holdings");
+}
+
 export async function startZerodhaAuth() {
   return apiGet("/auth/broker/zerodha/start");
 }
