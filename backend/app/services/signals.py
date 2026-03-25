@@ -94,8 +94,8 @@ def generate_signals_for_user(user_id: str) -> dict:
 
         except Exception as e:
             message = str(e)
+            print(f"Signal insert failed for {symbol}: {e}")
 
-            # Only count real duplicate-key conflicts as skipped
             if "duplicate key" in message.lower() or "uq_signals_user_symbol_strategy_day" in message:
                 skipped += 1
             else:
