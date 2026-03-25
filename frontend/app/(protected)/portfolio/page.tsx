@@ -87,9 +87,7 @@ export default function PortfolioPage() {
       setLoading(false);
     }
   };
-
-  const [lastSynced, setLastSynced] = useState<string | null>(null);
-
+  
   const loadPortfolio = async () => {
   try {
     const [summaryData, holdingsData] = await Promise.all([
