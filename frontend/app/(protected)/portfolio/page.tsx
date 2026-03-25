@@ -7,6 +7,22 @@ import {
   syncPortfolio,
 } from "@/lib/api";
 
+const formatINR = (value: number | string | null | undefined) => {
+  const num = Number(value ?? 0);
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(num);
+};
+
+const getPnlClass = (value: number | string | null | undefined) => {
+  const num = Number(value ?? 0);
+  if (num > 0) return "text-green-600 font-semibold";
+  if (num < 0) return "text-red-600 font-semibold";
+  return "text-slate-600 font-medium";
+};
+
 export default function PortfolioPage() {
   const [summary, setSummary] = useState<any>(null);
   const [holdings, setHoldings] = useState<any[]>([]);
@@ -66,14 +82,14 @@ export default function PortfolioPage() {
         <div className="card">
           <p className="subtle">Portfolio Value</p>
           <div className="metric mt-2">
-            ₹{summary?.total_portfolio_value ?? 0}
+            {formatINR(summary?.total_portfolio_value)}
           </div>
         </div>
 
         <div className="card">
           <p className="subtle">Total P&amp;L</p>
-          <div className="metric mt-2">
-            ₹{summary?.total_pnl ?? 0}
+          <div className={`metric mt-2 ${getPnlClass(summary?.total_pnl)}`}>
+            {formatINR(summary?.total_pnl)}
           </div>
         </div>
 
@@ -107,13 +123,15 @@ export default function PortfolioPage() {
                   key={`${item.snapshot_id}-${item.symbol}-${item.exchange}-${index}`}
                   className="border-t border-slate-200"
                 >
-                  <td className="py-3">{item.symbol}</td>
+                  <td className="py-3 font-medium">{item.symbol}</td>
                   <td className="py-3">{item.exchange}</td>
-                  <td className="py-3">{item.quantity}</td>
-                  <td className="py-3">₹{item.avg_price ?? 0}</td>
-                  <td className="py-3">₹{item.ltp ?? 0}</td>
-                  <td className="py-3">₹{item.market_value ?? 0}</td>
-                  <td className="py-3">₹{item.pnl ?? 0}</td>
+                  <td className="py-3">{item.quantity ?? 0}</td>
+                  <td className="py-3">{formatINR(item.avg_price)}</td>
+                  <td className="py-3">{formatINR(item.ltp)}</td>
+                  <td className="py-3">{formatINR(item.market_value)}</td>
+                  <td className={`py-3 ${getPnlClass(item.pnl)}`}>
+                    {formatINR(item.pnl)}
+                  </td>
                 </tr>
               ))}
             </tbody>
