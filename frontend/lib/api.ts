@@ -77,5 +77,5 @@ export async function getLogs() {
 }
 
 export async function startZerodhaAuth() {
-  return apiGet("/broker/zerodha/start");
+  return apiGet("/auth/broker/zerodha/start");
 }
