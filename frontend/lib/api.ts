@@ -83,3 +83,11 @@ export async function getLogs() {
 export async function startZerodhaAuth() {
   return apiGet("/auth/broker/zerodha/start");
 }
+
+export async function generateSignals() {
+  return apiPost("/signals/generate");
+}
+
+export async function getSignals() {
+  return apiGet("/signals");
+}
