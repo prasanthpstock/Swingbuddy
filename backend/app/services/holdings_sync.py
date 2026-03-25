@@ -31,14 +31,15 @@ def sync_holdings_for_user(user_id: str) -> dict:
     adapter = ZerodhaAdapter(access_token=access_token)
     holdings = adapter.get_holdings()
 
-    # Create one snapshot row for this sync
+    snapshot_time = datetime.now(timezone.utc).isoformat()
+
     snapshot_response = (
         supabase.table("portfolio_snapshots")
         .insert(
             {
                 "user_id": user_id,
                 "broker": "zerodha",
-                "synced_at": datetime.now(timezone.utc).isoformat(),
+                "synced_at": snapshot_time,
             }
         )
         .execute()
@@ -57,20 +58,21 @@ def sync_holdings_for_user(user_id: str) -> dict:
         last_price = float(item.get("last_price") or 0)
         avg_price = float(item.get("average_price") or 0)
 
-        row = {
-            "user_id": user_id,
-            "snapshot_id": snapshot_id,
-            "broker_connection_id": connection["id"],
-            "symbol": item.get("tradingsymbol"),
-            "exchange": item.get("exchange"),
-            "quantity": quantity,
-            "avg_price": avg_price,
-            "ltp": last_price,
-            "market_value": quantity * last_price,
-            "pnl": float(item.get("pnl") or 0),
-        }
-
-        rows_to_insert.append(row)
+        rows_to_insert.append(
+            {
+                "user_id": user_id,
+                "snapshot_id": snapshot_id,
+                "snapshot_at": snapshot_time,
+                "broker_connection_id": connection["id"],
+                "symbol": item.get("tradingsymbol"),
+                "exchange": item.get("exchange"),
+                "quantity": quantity,
+                "avg_price": avg_price,
+                "ltp": last_price,
+                "market_value": quantity * last_price,
+                "pnl": float(item.get("pnl") or 0),
+            }
+        )
 
     if rows_to_insert:
         supabase.table("holdings_snapshots").insert(rows_to_insert).execute()
