@@ -79,7 +79,7 @@ def generate_signals_for_user(user_id: str) -> dict:
             "signal_type": "watch",
             "price": item.get("ltp"),
             "notes": "Generated from latest holdings snapshot",
-            "signal_date": signal_date,
+            "date": signal_date,
             "created_at": now_iso,
         }
 
