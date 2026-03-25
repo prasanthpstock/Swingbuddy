@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.brokers.zerodha import ZerodhaAdapter
 from app.core.config import settings
 from app.core.security import decrypt_text
@@ -21,12 +23,34 @@ def sync_holdings_for_user(user_id: str) -> dict:
         return {"status": "error", "message": "No active Zerodha connection"}
 
     connection = connections[0]
-    access_token = decrypt_text(connection["access_token_encrypted"], settings.encryption_key)
+    access_token = decrypt_text(
+        connection["access_token_encrypted"],
+        settings.encryption_key,
+    )
 
     adapter = ZerodhaAdapter(access_token=access_token)
     holdings = adapter.get_holdings()
 
-    inserted = 0
+    # Create one snapshot row for this sync
+    snapshot_response = (
+        supabase.table("portfolio_snapshots")
+        .insert(
+            {
+                "user_id": user_id,
+                "broker": "zerodha",
+                "synced_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        .execute()
+    )
+
+    snapshot_rows = snapshot_response.data or []
+    if not snapshot_rows:
+        return {"status": "error", "message": "Failed to create portfolio snapshot"}
+
+    snapshot_id = snapshot_rows[0]["id"]
+
+    rows_to_insert = []
 
     for item in holdings:
         quantity = float(item.get("quantity") or 0)
@@ -35,6 +59,7 @@ def sync_holdings_for_user(user_id: str) -> dict:
 
         row = {
             "user_id": user_id,
+            "snapshot_id": snapshot_id,
             "broker_connection_id": connection["id"],
             "symbol": item.get("tradingsymbol"),
             "exchange": item.get("exchange"),
@@ -45,7 +70,13 @@ def sync_holdings_for_user(user_id: str) -> dict:
             "pnl": float(item.get("pnl") or 0),
         }
 
-        supabase.table("holdings_snapshots").insert(row).execute()
-        inserted += 1
+        rows_to_insert.append(row)
 
-    return {"status": "success", "inserted": inserted}
+    if rows_to_insert:
+        supabase.table("holdings_snapshots").insert(rows_to_insert).execute()
+
+    return {
+        "status": "success",
+        "snapshot_id": snapshot_id,
+        "inserted": len(rows_to_insert),
+    }
