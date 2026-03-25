@@ -41,18 +41,26 @@ export default function SignalsPage() {
     loadSignals();
   }, []);
 
-  const handleGenerate = async () => {
-    setLoading(true);
-    try {
-      await generateSignals();
-      await loadSignals();
-    } catch (err: any) {
-      console.error("Failed to generate signals", err);
-      alert(err?.message || "Failed to generate signals.");
-    } finally {
-      setLoading(false);
+const handleGenerate = async () => {
+  setLoading(true);
+  try {
+    const result = await generateSignals();
+    await loadSignals();
+
+    if (result?.status === "success") {
+      alert(
+        `Signals generated.\nInserted: ${result.inserted ?? 0}\nSkipped: ${result.skipped ?? 0}`
+      );
+    } else {
+      alert(result?.message || "Signal generation did not complete.");
     }
-  };
+  } catch (err: any) {
+    console.error("Failed to generate signals", err);
+    alert(err?.message || "Failed to generate signals.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="space-y-6">
