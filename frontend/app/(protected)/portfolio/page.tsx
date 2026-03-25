@@ -23,9 +23,9 @@ export default function PortfolioPage() {
   const handleSync = async () => {
     setLoading(true);
     try {
-      await syncPortfolio();   // trigger backend sync
-      await loadSummary();     // refresh summary
-    } catch (err) {
+      await syncPortfolio();
+      await loadSummary();
+    } catch (err: any) {
       console.error("Sync failed", err);
       alert(err?.message || "Sync failed. Please try again.");
     } finally {
@@ -35,17 +35,12 @@ export default function PortfolioPage() {
 
   return (
     <div className="space-y-6">
-
-      {/* Header */}
       <div className="card flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Portfolio Overview</h3>
-          <p className="mt-2 subtle">
-            Latest snapshot of your holdings.
-          </p>
+          <p className="mt-2 subtle">Latest snapshot of your holdings.</p>
         </div>
 
-        {/* Sync Button */}
         <button
           onClick={handleSync}
           disabled={loading}
@@ -57,7 +52,6 @@ export default function PortfolioPage() {
         </button>
       </div>
 
-      {/* Metrics */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="card">
           <p className="subtle">Portfolio Value</p>
@@ -80,7 +74,6 @@ export default function PortfolioPage() {
           </div>
         </div>
       </div>
-
     </div>
   );
 }
