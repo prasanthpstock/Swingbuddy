@@ -9,6 +9,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 export default function BrokersPage() {
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
 
   async function loadConnections() {
     try {
@@ -34,6 +35,11 @@ export default function BrokersPage() {
         cache: "no-store",
       });
 
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Failed to load broker connections: ${text}`);
+      }
+
       const result = await response.json();
       setConnections(Array.isArray(result) ? result : []);
     } catch (err) {
@@ -49,9 +55,21 @@ export default function BrokersPage() {
   }, []);
 
   async function connectZerodha() {
-    const result = await startZerodhaAuth();
-    if (result.login_url) {
-      window.location.href = result.login_url;
+    try {
+      setConnecting(true);
+      const result = await startZerodhaAuth();
+
+      if (result?.login_url) {
+        window.location.href = result.login_url;
+        return;
+      }
+
+      throw new Error("Missing Zerodha login URL");
+    } catch (err: any) {
+      console.error("Failed to start Zerodha auth", err);
+      alert(err?.message || "Failed to start Zerodha connection");
+    } finally {
+      setConnecting(false);
     }
   }
 
@@ -85,9 +103,18 @@ export default function BrokersPage() {
 
         <button
           onClick={connectZerodha}
-          className="rounded-xl bg-slate-900 px-4 py-2 text-white"
+          disabled={connecting}
+          className={`rounded-xl px-4 py-2 text-white ${
+            connecting
+              ? "bg-slate-400 cursor-not-allowed"
+              : "bg-slate-900 hover:bg-slate-800"
+          }`}
         >
-          {zerodhaConnected ? "Reconnect Zerodha" : "Connect Zerodha"}
+          {connecting
+            ? "Opening Zerodha..."
+            : zerodhaConnected
+            ? "Reconnect Zerodha"
+            : "Connect Zerodha"}
         </button>
       </div>
     </div>
