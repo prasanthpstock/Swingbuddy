@@ -88,6 +88,24 @@ export default function PortfolioPage() {
     }
   };
 
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+
+  const loadPortfolio = async () => {
+  try {
+    const [summaryData, holdingsData] = await Promise.all([
+      getPortfolioSummary(),
+      getPortfolioHoldings(),
+    ]);
+
+    setSummary(summaryData);
+    setHoldings(Array.isArray(holdingsData) ? holdingsData : []);
+
+    // ❌ OLD (or missing)
+  } catch (err) {
+    console.error("Failed to load portfolio", err);
+  }
+};
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
