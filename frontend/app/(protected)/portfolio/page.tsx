@@ -60,12 +60,7 @@ export default function PortfolioPage() {
 
       setSummary(summaryData);
       setHoldings(Array.isArray(holdingsData) ? holdingsData : []);
-
-      if (Array.isArray(holdingsData) && holdingsData.length > 0) {
-        setLastSynced(holdingsData[0]?.snapshot_at ?? null);
-      } else {
-        setLastSynced(null);
-      }
+      setLastSynced(summaryData?.synced_at ?? null);
     } catch (err) {
       console.error("Failed to load portfolio", err);
     }
@@ -87,22 +82,6 @@ export default function PortfolioPage() {
       setLoading(false);
     }
   };
-  
-  const loadPortfolio = async () => {
-  try {
-    const [summaryData, holdingsData] = await Promise.all([
-      getPortfolioSummary(),
-      getPortfolioHoldings(),
-    ]);
-
-    setSummary(summaryData);
-    setHoldings(Array.isArray(holdingsData) ? holdingsData : []);
-
-    // ❌ OLD (or missing)
-  } catch (err) {
-    console.error("Failed to load portfolio", err);
-  }
-};
 
   return (
     <div className="space-y-6">
