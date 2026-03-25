@@ -1,70 +1,45 @@
-import { getSupabaseClient } from "./supabase";
+import { supabase } from "@/lib/supabase";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL!;
 
-async function authHeaders(): Promise<Record<string, string>> {
-  const supabase = getSupabaseClient();
+async function getAuthHeaders() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!supabase) {
-    return {
-      "Content-Type": "application/json",
-    };
-  }
-
-  const { data } = await supabase.auth.getSession();
-
-  const headers: Record<string, string> = {
+  return {
     "Content-Type": "application/json",
+    Authorization: `Bearer ${session?.access_token}`,
   };
-
-  if (data.session?.access_token) {
-    headers.Authorization = `Bearer ${data.session.access_token}`;
-  }
-
-  return headers;
 }
 
 export async function getPortfolioSummary() {
-  return fetch(`${API_BASE_URL}/portfolio/summary`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  }).then((r) => r.json());
-}
+  const headers = await getAuthHeaders();
 
-export async function getSignals() {
-  return fetch(`${API_BASE_URL}/signals`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  }).then((r) => r.json());
-}
+  const res = await fetch(`${API_BASE_URL}/portfolio/summary`, {
+    method: "GET",
+    headers,
+  });
 
-export async function getAlerts() {
-  return fetch(`${API_BASE_URL}/alerts`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  }).then((r) => r.json());
-}
+  if (!res.ok) {
+    throw new Error("Failed to fetch portfolio summary");
+  }
 
-export async function getLogs() {
-  return fetch(`${API_BASE_URL}/logs`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  }).then((r) => r.json());
-}
-
-export async function startZerodhaAuth() {
-  return fetch(`${API_BASE_URL}/auth/broker/zerodha/start`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  }).then((r) => r.json());
+  return res.json();
 }
 
 export async function syncPortfolio() {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/portfolio/sync`, {
+  const headers = await getAuthHeaders();
+
+  const res = await fetch(`${API_BASE_URL}/portfolio/sync`, {
     method: "POST",
-    credentials: "include",
+    headers,
   });
 
-  if (!res.ok) throw new Error("Failed to sync portfolio");
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to sync portfolio: ${text}`);
+  }
+
   return res.json();
 }
