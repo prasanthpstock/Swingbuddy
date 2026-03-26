@@ -62,6 +62,9 @@ def generate_signals_for_user(user_id: str) -> dict:
         return {
             "status": "error",
             "message": "No portfolio snapshot found. Sync holdings first.",
+            "created": [],
+            "inserted": 0,
+            "skipped": 0,
         }
 
     holdings_response = (
@@ -77,6 +80,9 @@ def generate_signals_for_user(user_id: str) -> dict:
         return {
             "status": "error",
             "message": "No holdings found in latest snapshot.",
+            "created": [],
+            "inserted": 0,
+            "skipped": 0,
         }
 
     signal_date = datetime.now(timezone.utc).date().isoformat()
@@ -85,6 +91,7 @@ def generate_signals_for_user(user_id: str) -> dict:
     inserted = 0
     skipped = 0
     errors: list[dict] = []
+    created_signals: list[dict] = []
 
     for item in holdings:
         symbol = item.get("symbol")
@@ -110,6 +117,7 @@ def generate_signals_for_user(user_id: str) -> dict:
         pnl = float(item.get("pnl") or 0)
         avg_price = float(item.get("avg_price") or 0)
         quantity = float(item.get("quantity") or 0)
+        ltp = float(item.get("ltp") or 0)
 
         invested = avg_price * quantity
         pnl_pct = (pnl / invested * 100) if invested > 0 else 0
@@ -129,7 +137,7 @@ def generate_signals_for_user(user_id: str) -> dict:
             "symbol": symbol,
             "strategy": "pnl_v1",
             "signal_type": signal_type,
-            "price": item.get("ltp"),
+            "price": ltp,
             "notes": notes,
             "signal_date": signal_date,
             "created_at": now_iso,
@@ -138,6 +146,19 @@ def generate_signals_for_user(user_id: str) -> dict:
         try:
             supabase.table("signals").insert(row).execute()
             inserted += 1
+
+            created_signals.append(
+                {
+                    "symbol": symbol,
+                    "action": signal_type.upper(),
+                    "strategy": "pnl_v1",
+                    "reason": notes,
+                    "price": ltp,
+                    "pnl": pnl,
+                    "signal_date": signal_date,
+                }
+            )
+
         except Exception as e:
             message = str(e)
             print(f"Signal insert failed for {symbol}: {e}")
@@ -159,13 +180,16 @@ def generate_signals_for_user(user_id: str) -> dict:
         return {
             "status": "error",
             "message": "Some signals failed to insert.",
+            "created": created_signals,
             "inserted": inserted,
             "skipped": skipped,
             "errors": errors,
+            "signal_date": signal_date,
         }
 
     return {
         "status": "success",
+        "created": created_signals,
         "inserted": inserted,
         "skipped": skipped,
         "signal_date": signal_date,
