@@ -74,19 +74,19 @@ def generate_signals_for_user(user_id: str) -> dict:
             continue
 
         existing = (
-        supabase.table("signals")
-        .select("id")
-        .eq("user_id", user_id)
-        .eq("symbol", symbol)
-        .eq("strategy", "pnl_v1")
-        .eq("signal_date", signal_date)
-        .limit(1)
-        .execute()
-    )
+            supabase.table("signals")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("symbol", symbol)
+            .eq("strategy", "pnl_v1")
+            .eq("signal_date", signal_date)
+            .limit(1)
+            .execute()
+        )
 
-    if existing.data:
-        skipped += 1
-        continue
+        if existing.data:
+            skipped += 1
+            continue
 
         pnl = float(item.get("pnl") or 0)
         avg_price = float(item.get("avg_price") or 0)
@@ -97,10 +97,10 @@ def generate_signals_for_user(user_id: str) -> dict:
 
         if pnl_pct > 5:
             signal_type = "sell"
-            notes = f"Profit at {round(pnl_pct, 2)}% — consider booking"
+            notes = f"Profit at {round(pnl_pct, 2)}% - consider booking"
         elif pnl_pct < -3:
             signal_type = "risk"
-            notes = f"Loss at {round(pnl_pct, 2)}% — consider stop loss"
+            notes = f"Loss at {round(pnl_pct, 2)}% - consider stop loss"
         else:
             signal_type = "hold"
             notes = f"Stable position ({round(pnl_pct, 2)}%)"
@@ -117,18 +117,16 @@ def generate_signals_for_user(user_id: str) -> dict:
         }
 
         try:
-            response = supabase.table("signals").insert(row).execute()
-
-            if response.data is not None:
-                inserted += 1
-            else:
-                inserted += 1
-
+            supabase.table("signals").insert(row).execute()
+            inserted += 1
         except Exception as e:
             message = str(e)
             print(f"Signal insert failed for {symbol}: {e}")
 
-            if "duplicate key" in message.lower() or "uq_signals_user_symbol_strategy_day" in message:
+            if (
+                "duplicate key" in message.lower()
+                or "uq_signals_user_symbol_strategy_day" in message
+            ):
                 skipped += 1
             else:
                 errors.append(
