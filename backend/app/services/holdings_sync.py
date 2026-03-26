@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from kiteconnect.exceptions import TokenException
+
 from app.brokers.zerodha import ZerodhaAdapter
 from app.core.config import settings
 from app.core.security import decrypt_text
@@ -28,8 +30,18 @@ def sync_holdings_for_user(user_id: str) -> dict:
         settings.encryption_key,
     )
 
-    adapter = ZerodhaAdapter(access_token=access_token)
-    holdings = adapter.get_holdings()
+    try:
+        adapter = ZerodhaAdapter(access_token=access_token)
+        holdings = adapter.get_holdings()
+    except TokenException:
+        supabase.table("broker_connections").update(
+            {"status": "expired"}
+        ).eq("id", connection["id"]).execute()
+
+        return {
+            "status": "error",
+            "message": "Zerodha session expired. Please reconnect your broker.",
+        }
 
     snapshot_time = datetime.now(timezone.utc).isoformat()
 
