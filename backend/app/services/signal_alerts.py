@@ -17,21 +17,11 @@ async def send_signal_alerts_for_user(user_id: str, new_signals: list[dict]) -> 
         .table("profiles")
         .select("telegram_chat_id,telegram_alerts_enabled")
         .eq("id", user_id)
-        .limit(1)
+        .single()
         .execute()
     )
 
-    profile_response = (
-    get_supabase_admin()
-    .table("profiles")
-    .select("telegram_chat_id,telegram_alerts_enabled")
-    .eq("id", user_id)
-    .single()
-    .execute()
-)
-
-profile = profile_response.data or {}
-    profile = rows[0] if rows else {}
+    profile = profile_response.data or {}
 
     chat_id = profile.get("telegram_chat_id")
     alerts_enabled = profile.get("telegram_alerts_enabled", False)
@@ -48,11 +38,11 @@ profile = profile_response.data or {}
             await telegram_service.send_message(chat_id=chat_id, text=message)
             sent += 1
         except Exception as exc:
-    failed += 1
-    print(
-        f"[JOB][TELEGRAM] Failed | user={user_id} "
-        f"symbol={signal.get('symbol')} error={str(exc)}"
-    )
+            failed += 1
+            print(
+                f"[JOB][TELEGRAM] Failed | user={user_id} "
+                f"symbol={signal.get('symbol')} error={str(exc)}"
+            )
 
     return {
         "status": "success" if sent > 0 else "failed",
