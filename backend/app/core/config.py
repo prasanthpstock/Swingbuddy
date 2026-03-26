@@ -15,7 +15,14 @@ class Settings(BaseSettings):
     telegram_chat_id: str | None = None
     encryption_key: str
     frontend_url: str = "http://localhost:3000"
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore")
+    internal_job_secret: str | None = None
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
 @lru_cache
 def get_settings() -> Settings:
