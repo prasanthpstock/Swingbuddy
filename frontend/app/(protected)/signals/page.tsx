@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSignals, generateSignals } from "@/lib/api";
+
+type Signal = {
+  id: string;
+  symbol: string;
+  strategy: string;
+  signal_type: string | null;
+  price: number | null;
+  notes: string | null;
+  created_at: string | null;
+};
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "—";
@@ -14,19 +24,35 @@ const formatDateTime = (value: string | null | undefined) => {
   }).format(date);
 };
 
+const formatINR = (value: number | string | null | undefined) => {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "—";
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(num);
+};
+
 const getSignalBadgeClass = (signalType: string | null | undefined) => {
-  if (signalType === "buy") {
+  if (signalType === "sell") {
     return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
   }
-  if (signalType === "sell") {
+  if (signalType === "risk") {
     return "bg-red-50 text-red-700 ring-1 ring-red-200";
+  }
+  if (signalType === "hold") {
+    return "bg-slate-100 text-slate-700 ring-1 ring-slate-200";
   }
   return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
 };
 
 export default function SignalsPage() {
-  const [signals, setSignals] = useState<any[]>([]);
+  const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState("all");
 
   const loadSignals = async () => {
     try {
@@ -41,33 +67,51 @@ export default function SignalsPage() {
     loadSignals();
   }, []);
 
-const handleGenerate = async () => {
-  setLoading(true);
-  try {
-    const result = await generateSignals();
-    await loadSignals();
+  const handleGenerate = async () => {
+    setLoading(true);
+    try {
+      const result = await generateSignals();
+      await loadSignals();
 
-    if (result?.status === "success") {
-      if ((result.inserted ?? 0) > 0) {
-        alert(`✅ ${result.inserted} new signals generated`);
-      } else {
-        alert(`ℹ️ Signals already generated for today\nSkipped: ${result.skipped ?? 0}`);
+      if (result?.status === "success") {
+        if ((result.inserted ?? 0) > 0) {
+          alert(`✅ ${result.inserted} new signals generated`);
+        } else {
+          alert(`ℹ️ Signals already generated for today\nSkipped: ${result.skipped ?? 0}`);
+        }
+        return;
       }
-      return;
+
+      const detailedErrors = Array.isArray(result?.errors)
+        ? result.errors.map((e: any) => `${e.symbol}: ${e.error}`).join("\n\n")
+        : null;
+
+      alert(detailedErrors || result?.message || "Signal generation failed.");
+    } catch (err: any) {
+      console.error("Failed to generate signals", err);
+      alert(err?.message || "Failed to generate signals.");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const detailedErrors = Array.isArray(result?.errors)
-      ? result.errors.map((e: any) => `${e.symbol}: ${e.error}`).join("\n\n")
-      : null;
+  const summary = useMemo(() => {
+    const sell = signals.filter((s) => s.signal_type === "sell").length;
+    const risk = signals.filter((s) => s.signal_type === "risk").length;
+    const hold = signals.filter((s) => s.signal_type === "hold").length;
 
-    alert(detailedErrors || result?.message || "Signal generation failed.");
-  } catch (err: any) {
-    console.error("Failed to generate signals", err);
-    alert(err?.message || "Failed to generate signals.");
-  } finally {
-    setLoading(false);
-  }
-};
+    return {
+      total: signals.length,
+      sell,
+      risk,
+      hold,
+    };
+  }, [signals]);
+
+  const filteredSignals = useMemo(() => {
+    if (filter === "all") return signals;
+    return signals.filter((signal) => signal.signal_type === filter);
+  }, [signals, filter]);
 
   return (
     <div className="space-y-6">
@@ -94,12 +138,62 @@ const handleGenerate = async () => {
         </div>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Total Signals</p>
+          <div className="mt-3 text-2xl font-semibold text-slate-900">
+            {summary.total}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Sell Signals</p>
+          <div className="mt-3 text-2xl font-semibold text-emerald-600">
+            {summary.sell}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Risk Signals</p>
+          <div className="mt-3 text-2xl font-semibold text-red-600">
+            {summary.risk}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Hold Signals</p>
+          <div className="mt-3 text-2xl font-semibold text-slate-700">
+            {summary.hold}
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Latest Signals</h3>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-            {signals.length} {signals.length === 1 ? "signal" : "signals"}
-          </span>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-slate-900">Latest Signals</h3>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+              {filteredSignals.length} {filteredSignals.length === 1 ? "signal" : "signals"}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {["all", "sell", "risk", "hold"].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilter(type)}
+                className={`rounded-full px-3 py-1 text-sm font-medium transition ${
+                  filter === type
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                {type === "all"
+                  ? "All"
+                  : type.charAt(0).toUpperCase() + type.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mt-4 overflow-auto">
@@ -115,7 +209,7 @@ const handleGenerate = async () => {
               </tr>
             </thead>
             <tbody>
-              {signals.map((signal) => (
+              {filteredSignals.map((signal) => (
                 <tr
                   key={signal.id}
                   className="border-b border-slate-100 transition hover:bg-slate-50"
@@ -136,7 +230,7 @@ const handleGenerate = async () => {
                     </span>
                   </td>
                   <td className="py-4 pr-6 text-slate-700">
-                    {signal.price ?? "—"}
+                    {formatINR(signal.price)}
                   </td>
                   <td className="py-4 pr-6 text-slate-600">
                     {signal.notes || "—"}
@@ -149,9 +243,9 @@ const handleGenerate = async () => {
             </tbody>
           </table>
 
-          {signals.length === 0 ? (
+          {filteredSignals.length === 0 ? (
             <div className="py-10 text-center text-sm text-slate-500">
-              No signals found.
+              No signals found for this filter.
             </div>
           ) : null}
         </div>
