@@ -1,6 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.core.supabase import get_supabase_admin
+from app.services.strategies.breakout_strategy import generate_breakout_signal
+from app.services.strategies.pnl_strategy import generate_pnl_signal
+from app.brokers.zerodha import ZerodhaAdapter
+from app.core.config import settings
+from app.core.security import decrypt_text
 
 
 def get_signals_for_user(user_id: str) -> list[dict]:
@@ -10,7 +15,6 @@ def get_signals_for_user(user_id: str) -> list[dict]:
         supabase.table("signals")
         .select("signal_date")
         .eq("user_id", user_id)
-        .eq("strategy", "pnl_v1")
         .order("signal_date", desc=True)
         .limit(1)
         .execute()
@@ -26,10 +30,9 @@ def get_signals_for_user(user_id: str) -> list[dict]:
         supabase.table("signals")
         .select("*")
         .eq("user_id", user_id)
-        .eq("strategy", "pnl_v1")
         .eq("signal_date", latest_signal_date)
         .order("created_at", desc=True)
-        .limit(100)
+        .limit(200)
         .execute()
     )
 
@@ -52,6 +55,76 @@ def _get_latest_snapshot_id(user_id: str) -> str | None:
         return None
 
     return rows[0]["id"]
+
+
+def _get_zerodha_adapter_for_user(user_id: str) -> ZerodhaAdapter | None:
+    supabase = get_supabase_admin()
+
+    connections = (
+        supabase.table("broker_connections")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("broker_name", "zerodha")
+        .eq("status", "active")
+        .limit(1)
+        .execute()
+    ).data or []
+
+    if not connections:
+        return None
+
+    connection = connections[0]
+    access_token = decrypt_text(
+        connection["access_token_encrypted"],
+        settings.encryption_key,
+    )
+
+    return ZerodhaAdapter(access_token=access_token)
+
+
+def _get_historical_candles_for_symbol(
+    adapter: ZerodhaAdapter | None,
+    symbol: str,
+    exchange: str | None,
+) -> list[dict]:
+    if not adapter or not symbol:
+        return []
+
+    try:
+        to_date = datetime.now(timezone.utc)
+        from_date = to_date - timedelta(days=40)
+
+        return adapter.get_daily_candles(
+            symbol=symbol,
+            exchange=exchange,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except Exception as e:
+        print(f"Failed to fetch candles for {symbol}: {e}")
+        return []
+
+
+def _build_signals_for_holding(
+    item: dict,
+    adapter: ZerodhaAdapter | None,
+) -> list[dict]:
+    signals: list[dict] = []
+
+    pnl_signal = generate_pnl_signal(item)
+    if pnl_signal:
+        signals.append(pnl_signal)
+
+    candles = _get_historical_candles_for_symbol(
+        adapter=adapter,
+        symbol=item.get("symbol"),
+        exchange=item.get("exchange"),
+    )
+    breakout_signal = generate_breakout_signal(item, candles)
+    if breakout_signal:
+        signals.append(breakout_signal)
+
+    return signals
 
 
 def generate_signals_for_user(user_id: str) -> dict:
@@ -85,6 +158,8 @@ def generate_signals_for_user(user_id: str) -> dict:
             "skipped": 0,
         }
 
+    adapter = _get_zerodha_adapter_for_user(user_id)
+
     signal_date = datetime.now(timezone.utc).date().isoformat()
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -94,87 +169,71 @@ def generate_signals_for_user(user_id: str) -> dict:
     created_signals: list[dict] = []
 
     for item in holdings:
-        symbol = item.get("symbol")
-        if not symbol:
-            skipped += 1
-            continue
+        generated_signals = _build_signals_for_holding(item=item, adapter=adapter)
 
-        existing = (
-            supabase.table("signals")
-            .select("id")
-            .eq("user_id", user_id)
-            .eq("symbol", symbol)
-            .eq("strategy", "pnl_v1")
-            .eq("signal_date", signal_date)
-            .limit(1)
-            .execute()
-        )
+        for signal in generated_signals:
+            symbol = signal["symbol"]
+            strategy = signal["strategy"]
 
-        if existing.data:
-            skipped += 1
-            continue
-
-        pnl = float(item.get("pnl") or 0)
-        avg_price = float(item.get("avg_price") or 0)
-        quantity = float(item.get("quantity") or 0)
-        ltp = float(item.get("ltp") or 0)
-
-        invested = avg_price * quantity
-        pnl_pct = (pnl / invested * 100) if invested > 0 else 0
-
-        if pnl_pct > 5:
-            signal_type = "sell"
-            notes = f"Profit at {round(pnl_pct, 2)}% - consider booking"
-        elif pnl_pct < -3:
-            signal_type = "risk"
-            notes = f"Loss at {round(pnl_pct, 2)}% - consider stop loss"
-        else:
-            signal_type = "hold"
-            notes = f"Stable position ({round(pnl_pct, 2)}%)"
-
-        row = {
-            "user_id": user_id,
-            "symbol": symbol,
-            "strategy": "pnl_v1",
-            "signal_type": signal_type,
-            "price": ltp,
-            "notes": notes,
-            "signal_date": signal_date,
-            "created_at": now_iso,
-        }
-
-        try:
-            supabase.table("signals").insert(row).execute()
-            inserted += 1
-
-            created_signals.append(
-                {
-                    "symbol": symbol,
-                    "action": signal_type.upper(),
-                    "strategy": "pnl_v1",
-                    "reason": notes,
-                    "price": ltp,
-                    "pnl": pnl,
-                    "signal_date": signal_date,
-                }
+            existing = (
+                supabase.table("signals")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("symbol", symbol)
+                .eq("strategy", strategy)
+                .eq("signal_date", signal_date)
+                .limit(1)
+                .execute()
             )
 
-        except Exception as e:
-            message = str(e)
-            print(f"Signal insert failed for {symbol}: {e}")
-
-            if (
-                "duplicate key" in message.lower()
-                or "uq_signals_user_symbol_strategy_day" in message
-            ):
+            if existing.data:
                 skipped += 1
-            else:
-                errors.append(
+                continue
+
+            row = {
+                "user_id": user_id,
+                "symbol": symbol,
+                "strategy": strategy,
+                "signal_type": signal["signal_type"],
+                "price": signal["price"],
+                "notes": signal["notes"],
+                "signal_date": signal_date,
+                "created_at": now_iso,
+            }
+
+            try:
+                supabase.table("signals").insert(row).execute()
+                inserted += 1
+
+                created_signals.append(
                     {
                         "symbol": symbol,
-                        "error": message,
+                        "action": signal["signal_type"].upper(),
+                        "strategy": strategy,
+                        "reason": signal["notes"],
+                        "price": signal["price"],
+                        "pnl": float(item.get("pnl") or 0),
+                        "signal_date": signal_date,
                     }
                 )
+
+            except Exception as e:
+                message = str(e)
+                print(f"Signal insert failed for {symbol}/{strategy}: {e}")
+
+                if (
+                    "duplicate key" in message.lower()
+                    or "uq_signals_user_symbol_strategy_day" in message
+                ):
+                    skipped += 1
+                else:
+                    errors.append(
+                        {
+                            "symbol": symbol,
+                            "strategy": strategy,
+                            "error": message,
+                        }
+                    )
 
     if errors:
         return {
