@@ -2,10 +2,11 @@ import traceback
 
 from app.core.supabase import get_supabase_admin
 from app.services.holdings_sync import sync_holdings_for_user
+from app.services.signal_alerts import send_signal_alerts_for_user
 from app.services.signals import generate_signals_for_user
 
 
-def run_daily_signal_job() -> dict:
+async def run_daily_signal_job() -> dict:
     supabase = get_supabase_admin()
 
     try:
@@ -28,6 +29,11 @@ def run_daily_signal_job() -> dict:
 
         seen_users = set()
         results = []
+
+        total_new_signals = 0
+        total_skipped_signals = 0
+        total_telegram_sent = 0
+        total_telegram_failed = 0
 
         for connection in connections:
             user_id = connection.get("user_id")
@@ -54,18 +60,43 @@ def run_daily_signal_job() -> dict:
                 signals_result = generate_signals_for_user(user_id)
                 print(f"[JOB] Signals result for {user_id}: {signals_result}")
                 user_result["signals"] = signals_result
+
+                total_new_signals += signals_result.get("inserted", 0)
+                total_skipped_signals += signals_result.get("skipped", 0)
+
             except Exception as e:
                 print(f"[JOB] Signal generation failed for {user_id}:")
                 print(traceback.format_exc())
                 user_result["signals"] = {"status": "error", "message": str(e)}
+                results.append(user_result)
+                continue
+
+            try:
+                new_signals = signals_result.get("created", [])
+                telegram_result = await send_signal_alerts_for_user(
+                    user_id=user_id,
+                    new_signals=new_signals,
+                )
+                print(f"[JOB] Telegram result for {user_id}: {telegram_result}")
+                user_result["telegram"] = telegram_result
+
+                total_telegram_sent += telegram_result.get("sent", 0)
+                total_telegram_failed += telegram_result.get("failed", 0)
+
+            except Exception as e:
+                print(f"[JOB] Telegram alert failed for {user_id}:")
+                print(traceback.format_exc())
+                user_result["telegram"] = {"status": "error", "message": str(e)}
 
             results.append(user_result)
-
-            break
 
         return {
             "status": "success",
             "processed_users": len(results),
+            "new_signals": total_new_signals,
+            "skipped_signals": total_skipped_signals,
+            "telegram_sent": total_telegram_sent,
+            "telegram_failed": total_telegram_failed,
             "results": results,
         }
 
