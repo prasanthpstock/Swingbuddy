@@ -31,7 +31,7 @@ app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"])
 app.include_router(signals_router, prefix="/signals", tags=["signals"])
 app.include_router(alerts_router, prefix="/alerts", tags=["alerts"])
 app.include_router(logs_router, prefix="/logs", tags=["logs"])
-
+app.include_router(internal_router, prefix="/internal", tags=["internal"])
 
 @app.get("/")
 def root() -> dict:
