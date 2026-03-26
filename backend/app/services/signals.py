@@ -126,6 +126,55 @@ def _build_signals_for_holding(
 
     return signals
 
+def _get_historical_candles_for_symbol(
+    adapter: ZerodhaAdapter | None,
+    symbol: str,
+    exchange: str | None,
+) -> list[dict]:
+    if not adapter or not symbol:
+        return []
+
+    try:
+        to_date = datetime.now(timezone.utc)
+        from_date = to_date - timedelta(days=40)
+
+        candles = adapter.get_daily_candles(
+            symbol=symbol,
+            exchange=exchange or "NSE",
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        print(f"[BREAKOUT] Candles fetched for {symbol}: {len(candles)}")
+        return candles
+    except Exception as e:
+        print(f"Failed to fetch candles for {symbol}: {e}")
+        return []
+
+def _build_signals_for_holding(
+    item: dict,
+    adapter: ZerodhaAdapter | None,
+) -> list[dict]:
+    signals: list[dict] = []
+
+    pnl_signal = generate_pnl_signal(item)
+    if pnl_signal:
+        signals.append(pnl_signal)
+
+    candles = _get_historical_candles_for_symbol(
+        adapter=adapter,
+        symbol=item.get("symbol"),
+        exchange=item.get("exchange"),
+    )
+
+    breakout_signal = generate_breakout_signal(item, candles)
+    if breakout_signal:
+        print(f"[BREAKOUT] Triggered for {item.get('symbol')}: {breakout_signal}")
+        signals.append(breakout_signal)
+    else:
+        print(f"[BREAKOUT] No breakout for {item.get('symbol')}")
+
+    return signals
 
 def generate_signals_for_user(user_id: str) -> dict:
     supabase = get_supabase_admin()
