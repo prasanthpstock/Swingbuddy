@@ -12,8 +12,8 @@ def generate_breakout_signal(item: dict, candles: list[dict]) -> dict | None:
     resistance = max(float(c.get("high") or 0) for c in previous_20)
     avg_volume = sum(float(c.get("volume") or 0) for c in previous_20) / len(previous_20)
 
-    price_breakout = latest_close > resistance
-    volume_confirmed = avg_volume > 0 and latest_volume > (1.5 * avg_volume)
+    price_breakout = latest_close >= resistance * 0.98
+    volume_confirmed = avg_volume > 0 and latest_volume >= avg_volume
 
     if not (price_breakout and volume_confirmed):
         return None
