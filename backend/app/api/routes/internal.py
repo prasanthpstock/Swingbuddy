@@ -14,4 +14,8 @@ def run_daily_signals_job(x_internal_job_secret: str | None = Header(default=Non
     if x_internal_job_secret != settings.internal_job_secret:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    return run_daily_signal_job()
+    try:
+        return run_daily_signal_job()
+    except Exception as e:
+        print(f"[INTERNAL JOB ROUTE] Unhandled error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
