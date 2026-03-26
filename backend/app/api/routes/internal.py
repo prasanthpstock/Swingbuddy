@@ -1,3 +1,5 @@
+import traceback
+
 from fastapi import APIRouter, Header, HTTPException
 
 from app.core.config import settings
@@ -17,5 +19,6 @@ def run_daily_signals_job(x_internal_job_secret: str | None = Header(default=Non
     try:
         return run_daily_signal_job()
     except Exception as e:
-        print(f"[INTERNAL JOB ROUTE] Unhandled error: {e}")
+        print("[INTERNAL JOB ROUTE] Unhandled error:")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
