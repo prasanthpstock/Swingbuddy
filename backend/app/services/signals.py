@@ -73,6 +73,21 @@ def generate_signals_for_user(user_id: str) -> dict:
             skipped += 1
             continue
 
+        existing = (
+        supabase.table("signals")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("symbol", symbol)
+        .eq("strategy", "pnl_v1")
+        .eq("signal_date", signal_date)
+        .limit(1)
+        .execute()
+    )
+
+    if existing.data:
+        skipped += 1
+        continue
+
         pnl = float(item.get("pnl") or 0)
         avg_price = float(item.get("avg_price") or 0)
         quantity = float(item.get("quantity") or 0)
