@@ -1,3 +1,5 @@
+import traceback
+
 from app.core.supabase import get_supabase_admin
 from app.services.holdings_sync import sync_holdings_for_user
 from app.services.signals import generate_signals_for_user
@@ -42,7 +44,8 @@ def run_daily_signal_job() -> dict:
                 print(f"[JOB] Sync result for {user_id}: {sync_result}")
                 user_result["sync"] = sync_result
             except Exception as e:
-                print(f"[JOB] Sync failed for {user_id}: {e}")
+                print(f"[JOB] Sync failed for {user_id}:")
+                print(traceback.format_exc())
                 user_result["sync"] = {"status": "error", "message": str(e)}
                 results.append(user_result)
                 continue
@@ -52,12 +55,12 @@ def run_daily_signal_job() -> dict:
                 print(f"[JOB] Signals result for {user_id}: {signals_result}")
                 user_result["signals"] = signals_result
             except Exception as e:
-                print(f"[JOB] Signal generation failed for {user_id}: {e}")
+                print(f"[JOB] Signal generation failed for {user_id}:")
+                print(traceback.format_exc())
                 user_result["signals"] = {"status": "error", "message": str(e)}
 
             results.append(user_result)
 
-            # TEMP: one user only while debugging
             break
 
         return {
@@ -67,7 +70,8 @@ def run_daily_signal_job() -> dict:
         }
 
     except Exception as e:
-        print(f"[JOB] Fatal job error: {e}")
+        print("[JOB] Fatal job error:")
+        print(traceback.format_exc())
         return {
             "status": "error",
             "message": str(e),
