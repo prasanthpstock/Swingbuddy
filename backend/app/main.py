@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.telegram import router as telegram_router
 from app.api.routes.health import router as health_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.portfolio import router as portfolio_router
@@ -33,7 +34,7 @@ app.include_router(signals_router, prefix="/signals", tags=["signals"])
 app.include_router(alerts_router, prefix="/alerts", tags=["alerts"])
 app.include_router(logs_router, prefix="/logs", tags=["logs"])
 app.include_router(internal_router, prefix="/internal", tags=["internal"])
-
+app.include_router(telegram_router, prefix="/telegram", tags=["telegram"])
 
 @app.get("/")
 def root() -> dict:
