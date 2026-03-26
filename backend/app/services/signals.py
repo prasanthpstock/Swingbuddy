@@ -4,16 +4,35 @@ from app.core.supabase import get_supabase_admin
 
 
 def get_signals_for_user(user_id: str) -> list[dict]:
+    supabase = get_supabase_admin()
+
+    latest_response = (
+        supabase.table("signals")
+        .select("signal_date")
+        .eq("user_id", user_id)
+        .eq("strategy", "pnl_v1")
+        .order("signal_date", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    latest_rows = latest_response.data or []
+    if not latest_rows:
+        return []
+
+    latest_signal_date = latest_rows[0]["signal_date"]
+
     response = (
-        get_supabase_admin()
-        .table("signals")
+        supabase.table("signals")
         .select("*")
         .eq("user_id", user_id)
         .eq("strategy", "pnl_v1")
+        .eq("signal_date", latest_signal_date)
         .order("created_at", desc=True)
         .limit(100)
         .execute()
     )
+
     return response.data or []
 
 
