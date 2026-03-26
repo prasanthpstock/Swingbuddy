@@ -4,7 +4,7 @@ from app.core.config import settings
 
 class TelegramService:
     def __init__(self) -> None:
-        self.bot_token = settings.TELEGRAM_BOT_TOKEN
+        self.bot_token = settings.telegram_bot_token
 
     @property
     def is_enabled(self) -> bool:
