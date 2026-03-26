@@ -11,6 +11,8 @@ class ZerodhaAdapter:
         if access_token:
             self.client.set_access_token(access_token)
 
+        self._instrument_cache: dict[str, dict[str, int]] = {}
+
     def create_login_url(self) -> str:
         return self.client.login_url()
 
@@ -43,18 +45,29 @@ class ZerodhaAdapter:
             interval,
         )
 
+    def _load_instrument_cache_for_exchange(self, exchange: str = "NSE") -> None:
+        if exchange in self._instrument_cache:
+            return
+
+        instruments = self.get_instruments(exchange)
+        exchange_cache: dict[str, int] = {}
+
+        for instrument in instruments:
+            tradingsymbol = instrument.get("tradingsymbol")
+            instrument_token = instrument.get("instrument_token")
+
+            if tradingsymbol and instrument_token:
+                exchange_cache[tradingsymbol] = instrument_token
+
+        self._instrument_cache[exchange] = exchange_cache
+
     def get_instrument_token(
         self,
         symbol: str,
         exchange: str = "NSE",
     ) -> int | None:
-        instruments = self.get_instruments(exchange)
-
-        for instrument in instruments:
-            if instrument.get("tradingsymbol") == symbol:
-                return instrument.get("instrument_token")
-
-        return None
+        self._load_instrument_cache_for_exchange(exchange)
+        return self._instrument_cache.get(exchange, {}).get(symbol)
 
     def get_daily_candles(
         self,
