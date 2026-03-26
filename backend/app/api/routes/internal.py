@@ -9,7 +9,9 @@ router = APIRouter()
 
 
 @router.post("/jobs/daily-signals")
-def run_daily_signals_job(x_internal_job_secret: str | None = Header(default=None)) -> dict:
+async def run_daily_signals_job(
+    x_internal_job_secret: str | None = Header(default=None),
+) -> dict:
     if not settings.internal_job_secret:
         raise HTTPException(status_code=500, detail="Missing INTERNAL_JOB_SECRET")
 
@@ -17,7 +19,7 @@ def run_daily_signals_job(x_internal_job_secret: str | None = Header(default=Non
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        return run_daily_signal_job()
+        return await run_daily_signal_job()
     except Exception as e:
         print("[INTERNAL JOB ROUTE] Unhandled error:")
         print(traceback.format_exc())
