@@ -13,8 +13,27 @@ export default function SignalsPage() {
   }, []);
 
   const getToken = () => {
-    return localStorage.getItem("access_token");
-  };
+  try {
+    const key = Object.keys(localStorage).find((k) =>
+      k.startsWith("sb-") && k.endsWith("auth-token")
+    );
+
+    if (!key) {
+      console.error("Supabase auth key not found");
+      return null;
+    }
+
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    return parsed?.access_token || null;
+  } catch (err) {
+    console.error("Token parse error", err);
+    return null;
+  }
+};
 
   const fetchSignals = async () => {
     try {
