@@ -1,3 +1,5 @@
+import { SignalBadge } from "@/components/signals/SignalBadge";
+
 export function SignalsTable({ signals }: { signals: any[] }) {
   return (
     <div className="bg-white rounded-xl shadow overflow-x-auto">
