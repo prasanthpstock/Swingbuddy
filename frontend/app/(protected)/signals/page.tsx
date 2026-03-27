@@ -11,16 +11,25 @@ export default function SignalsPage() {
     fetchSignals();
   }, []);
 
-  const fetchSignals = async () => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/signals`, {
+  const res = await fetch(`${apiUrl}/signals`, {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Signals API failed:", res.status, text);
+      return;
+    }
+
     const data = await res.json();
+    console.log("Signals:", data);
     setSignals(data);
-  };
+  } catch (err) {
+    console.error("Fetch failed:", err);
+  }
+};
 
   return (
     <div className="p-6 space-y-6">
