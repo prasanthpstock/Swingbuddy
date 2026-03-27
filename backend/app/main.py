@@ -13,11 +13,13 @@ from app.core.config import settings
 
 app = FastAPI(title="Personal Trading App API", version="0.1.0")
 
-allowed_origins = [
-    settings.frontend_url,
-    "https://swingbuddy-prasanthpstocks-projects.vercel.app",
+allowed_origins = {
     "http://localhost:3000",
-]
+    "https://swingbuddy-prasanthpstocks-projects.vercel.app",
+}
+
+if settings.frontend_url:
+    allowed_origins.add(settings.frontend_url.strip().rstrip("/"))
 
 app.add_middleware(
     CORSMiddleware,
