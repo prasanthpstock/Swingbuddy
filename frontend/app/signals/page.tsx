@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SignalsSummary } from "@/components/signals/SignalsSummary";
+import { SignalsTable } from "@/components/signals/SignalsTable";
 
 export default function SignalsPage() {
   const [signals, setSignals] = useState([]);
