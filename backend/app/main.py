@@ -13,22 +13,31 @@ from app.core.config import settings
 
 app = FastAPI(title="Personal Trading App API", version="0.1.0")
 
+# --- CORS CONFIGURATION ---
 allowed_origins = {
     "http://localhost:3000",
     "https://swingbuddy-prasanthpstocks-projects.vercel.app",
 }
 
+# Add dynamic frontend URL if provided
 if settings.frontend_url:
     allowed_origins.add(settings.frontend_url.strip().rstrip("/"))
 
+# Convert to list for FastAPI
+allowed_origins_list = list(allowed_origins)
+
+# Debug log (very useful during deployment issues)
+print("[CORS] Allowed origins:", allowed_origins_list)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(allowed_origins),
+    allow_origins=allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# --- ROUTES ---
 app.include_router(health_router, prefix="/health", tags=["health"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"])
@@ -39,6 +48,7 @@ app.include_router(internal_router, prefix="/internal", tags=["internal"])
 app.include_router(telegram_router, prefix="/telegram", tags=["telegram"])
 
 
+# --- ROOT ---
 @app.get("/")
 def root() -> dict:
     return {"status": "ok", "service": "personal-trading-app-api"}
