@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
-from app.core.supabase import get_supabase_admin
-from app.services.strategies.breakout_strategy import generate_breakout_signal
-from app.services.strategies.pnl_strategy import generate_pnl_signal
 from app.brokers.zerodha import ZerodhaAdapter
 from app.core.config import settings
 from app.core.security import decrypt_text
+from app.core.supabase import get_supabase_admin
+from app.services.strategies.breakout_strategy import generate_breakout_signal
+from app.services.strategies.moving_avg_strategy import generate_moving_avg_signal
+from app.services.strategies.pnl_strategy import generate_pnl_signal
 
 
 def get_signals_for_user(user_id: str) -> list[dict]:
@@ -94,50 +95,6 @@ def _get_historical_candles_for_symbol(
         to_date = datetime.now(timezone.utc)
         from_date = to_date - timedelta(days=40)
 
-        return adapter.get_daily_candles(
-            symbol=symbol,
-            exchange=exchange,
-            from_date=from_date,
-            to_date=to_date,
-        )
-    except Exception as e:
-        print(f"Failed to fetch candles for {symbol}: {e}")
-        return []
-
-
-def _build_signals_for_holding(
-    item: dict,
-    adapter: ZerodhaAdapter | None,
-) -> list[dict]:
-    signals: list[dict] = []
-
-    pnl_signal = generate_pnl_signal(item)
-    if pnl_signal:
-        signals.append(pnl_signal)
-
-    candles = _get_historical_candles_for_symbol(
-        adapter=adapter,
-        symbol=item.get("symbol"),
-        exchange=item.get("exchange"),
-    )
-    breakout_signal = generate_breakout_signal(item, candles)
-    if breakout_signal:
-        signals.append(breakout_signal)
-
-    return signals
-
-def _get_historical_candles_for_symbol(
-    adapter: ZerodhaAdapter | None,
-    symbol: str,
-    exchange: str | None,
-) -> list[dict]:
-    if not adapter or not symbol:
-        return []
-
-    try:
-        to_date = datetime.now(timezone.utc)
-        from_date = to_date - timedelta(days=40)
-
         candles = adapter.get_daily_candles(
             symbol=symbol,
             exchange=exchange or "NSE",
@@ -151,6 +108,7 @@ def _get_historical_candles_for_symbol(
         print(f"Failed to fetch candles for {symbol}: {e}")
         return []
 
+
 def _build_signals_for_holding(
     item: dict,
     adapter: ZerodhaAdapter | None,
@@ -167,6 +125,13 @@ def _build_signals_for_holding(
         exchange=item.get("exchange"),
     )
 
+    moving_avg_signal = generate_moving_avg_signal(item, candles)
+    if moving_avg_signal:
+        print(f"[MOVING_AVG] Signal for {item.get('symbol')}: {moving_avg_signal}")
+        signals.append(moving_avg_signal)
+    else:
+        print(f"[MOVING_AVG] No signal for {item.get('symbol')}")
+
     breakout_signal = generate_breakout_signal(item, candles)
     if breakout_signal:
         print(f"[BREAKOUT] Triggered for {item.get('symbol')}: {breakout_signal}")
@@ -175,6 +140,7 @@ def _build_signals_for_holding(
         print(f"[BREAKOUT] No breakout for {item.get('symbol')}")
 
     return signals
+
 
 def generate_signals_for_user(user_id: str) -> dict:
     supabase = get_supabase_admin()
