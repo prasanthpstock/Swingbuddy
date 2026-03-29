@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SignalsSummary } from "@/components/signals/SignalsSummary";
-import { SignalsTable } from "@/components/signals/SignalsTable";
+import GroupedSignalsList from "@/components/GroupedSignalsList";
+import type { Signal } from "@/lib/groupSignals";
 
 type SortOption =
   | "newest"
@@ -283,7 +284,7 @@ export default function SignalsPage() {
         </select>
       </div>
 
-      <SignalsTable signals={sortedSignals} />
+      <GroupedSignalsList signals={sortedSignals as Signal[]} />
     </div>
   );
 }
