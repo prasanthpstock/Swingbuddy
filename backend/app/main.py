@@ -7,6 +7,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.alerts import router as alerts_router
 from app.api.routes.logs import router as logs_router
 from app.api.routes.telegram import router as telegram_router
+from app.api.routes.internal import router as internal_router
 
 app = FastAPI(title="Personal Trading App API", version="0.1.0")
 
@@ -29,6 +30,7 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(alerts_router, prefix="/alerts", tags=["alerts"])
 app.include_router(logs_router, prefix="/logs", tags=["logs"])
 app.include_router(telegram_router, prefix="/telegram", tags=["telegram"])
+app.include_router(internal_router, prefix="/internal", tags=["internal"])
 
 
 @app.get("/")
