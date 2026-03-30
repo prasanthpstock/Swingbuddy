@@ -18,6 +18,8 @@ type SortOption =
 export default function SignalsPage() {
   const [signals, setSignals] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [strategyFilter, setStrategyFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
@@ -58,10 +60,14 @@ export default function SignalsPage() {
 
   const fetchSignals = async () => {
     try {
+      setIsLoading(true);
+      setError(null);
+
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
       if (!apiUrl) {
         console.error("NEXT_PUBLIC_API_URL is missing");
+        setError("API configuration is missing.");
         return;
       }
 
@@ -69,6 +75,7 @@ export default function SignalsPage() {
 
       if (!token) {
         console.error("Access token missing");
+        setError("Access token missing. Please sign in again.");
         return;
       }
 
@@ -81,6 +88,7 @@ export default function SignalsPage() {
       if (!res.ok) {
         const text = await res.text();
         console.error("Signals API failed:", res.status, text);
+        setError("Failed to load signals.");
         return;
       }
 
@@ -88,6 +96,9 @@ export default function SignalsPage() {
       setSignals(data);
     } catch (err) {
       console.error("Fetch failed:", err);
+      setError("Failed to load signals.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -97,6 +108,7 @@ export default function SignalsPage() {
 
       if (!apiUrl) {
         console.error("NEXT_PUBLIC_API_URL is missing");
+        setError("API configuration is missing.");
         return;
       }
 
@@ -104,10 +116,12 @@ export default function SignalsPage() {
 
       if (!token) {
         console.error("Access token missing");
+        setError("Access token missing. Please sign in again.");
         return;
       }
 
       setIsGenerating(true);
+      setError(null);
 
       const res = await fetch(`${apiUrl}/signals/generate`, {
         method: "POST",
@@ -119,12 +133,14 @@ export default function SignalsPage() {
       if (!res.ok) {
         const text = await res.text();
         console.error("Generate signals failed:", res.status, text);
+        setError("Failed to generate signals.");
         return;
       }
 
       await fetchSignals();
     } catch (err) {
       console.error("Generate signals error:", err);
+      setError("Failed to generate signals.");
     } finally {
       setIsGenerating(false);
     }
@@ -210,6 +226,15 @@ export default function SignalsPage() {
     };
   }, [sortedSignals]);
 
+  const groupedSignalsInput = useMemo(() => {
+    return sortedSignals.map((s) => ({
+      ...s,
+      action: String(s.signal_type || "").toUpperCase(),
+    })) as Signal[];
+  }, [sortedSignals]);
+
+  const hasNoSignals = !isLoading && groupedSignalsInput.length === 0;
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -218,11 +243,17 @@ export default function SignalsPage() {
         <button
           onClick={generateSignals}
           disabled={isGenerating}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isGenerating ? "Generating..." : "Generate Signals"}
+          {isGenerating ? "Generating signals..." : "Generate Signals"}
         </button>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <SignalsSummary signals={sortedSignals} />
 
@@ -284,12 +315,17 @@ export default function SignalsPage() {
         </select>
       </div>
 
-      <GroupedSignalsList
-  signals={sortedSignals.map((s) => ({
-    ...s,
-    action: String(s.signal_type || "").toUpperCase(),
-  })) as Signal[]}
-/>
+      {isLoading ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+          Loading signals...
+        </div>
+      ) : hasNoSignals ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+          No signals found. Try generating signals or adjusting your filters.
+        </div>
+      ) : (
+        <GroupedSignalsList signals={groupedSignalsInput} />
+      )}
     </div>
   );
 }
