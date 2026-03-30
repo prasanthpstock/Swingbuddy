@@ -12,6 +12,10 @@ function formatDate(value: string) {
   return new Date(value).toLocaleString();
 }
 
+function getTimelineKey(signal: Signal, idx: number) {
+  return signal.id ?? `${signal.symbol}-${signal.strategy}-${signal.signal_date}-${idx}`;
+}
+
 export default function GroupedSignalsList({ signals }: Props) {
   const groupedSignals = useMemo(() => groupSignals(signals), [signals]);
   const [expandedSymbols, setExpandedSymbols] = useState<Record<string, boolean>>({});
@@ -36,6 +40,9 @@ export default function GroupedSignalsList({ signals }: Props) {
       {groupedSignals.map((group) => {
         const isExpanded = expandedSymbols[group.symbol] ?? true;
 
+        const currentStrategySignals = group.signals.slice(0, 3);
+        const historySignals = group.signals.slice(0, 8);
+
         return (
           <div
             key={group.symbol}
@@ -59,8 +66,8 @@ export default function GroupedSignalsList({ signals }: Props) {
                 </div>
 
                 <div className="mt-1 text-sm text-slate-500">
-                  {group.signals.length} signal{group.signals.length > 1 ? "s" : ""} ·
-                  {" "}Latest: {formatDate(group.latestSignalDate)}
+                  {group.signals.length} signal{group.signals.length > 1 ? "s" : ""} ·{" "}
+                  Latest: {formatDate(group.latestSignalDate)}
                 </div>
               </div>
 
@@ -70,29 +77,67 @@ export default function GroupedSignalsList({ signals }: Props) {
             </button>
 
             {isExpanded && (
-              <div className="border-t border-slate-100 px-4 py-3">
-                <div className="space-y-2">
-                  {group.signals.map((signal) => (
-                    <div
-                      key={signal.id}
-                      className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"
-                    >
-                      <div>
-                        <div className="text-sm font-medium text-slate-800">
-                          {signal.strategy}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {formatDate(signal.signal_date)}
-                        </div>
-                      </div>
-
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${getActionBadgeClass(signal.action)}`}
-                      >
-                        {signal.action}
-                      </span>
+              <div className="border-t border-slate-100 px-4 py-4">
+                <div className="space-y-4">
+                  <div>
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Current strategy signals
                     </div>
-                  ))}
+
+                    <div className="space-y-2">
+                      {currentStrategySignals.map((signal, idx) => (
+                        <div
+                          key={getTimelineKey(signal, idx)}
+                          className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"
+                        >
+                          <div>
+                            <div className="text-sm font-medium text-slate-800">
+                              {signal.strategy}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {formatDate(signal.signal_date)}
+                            </div>
+                          </div>
+
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${getActionBadgeClass(signal.action)}`}
+                          >
+                            {signal.action}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Timeline
+                    </div>
+
+                    <div className="space-y-2">
+                      {historySignals.map((signal, idx) => (
+                        <div
+                          key={`${getTimelineKey(signal, idx)}-timeline`}
+                          className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-slate-800">
+                              {signal.strategy}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {formatDate(signal.signal_date)}
+                            </div>
+                          </div>
+
+                          <span
+                            className={`ml-3 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${getActionBadgeClass(signal.action)}`}
+                          >
+                            {signal.action}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
