@@ -6,6 +6,8 @@ import { getActionBadgeClass, getGroupRowClass } from "@/lib/signalStyles";
 
 type Props = {
   signals: Signal[];
+  watchlist: string[];
+  onToggleWatch: (symbol: string) => void;
 };
 
 function formatDate(value: string) {
@@ -16,7 +18,11 @@ function getTimelineKey(signal: Signal, idx: number) {
   return signal.id ?? `${signal.symbol}-${signal.strategy}-${signal.signal_date}-${idx}`;
 }
 
-export default function GroupedSignalsList({ signals }: Props) {
+export default function GroupedSignalsList({
+  signals,
+  watchlist,
+  onToggleWatch,
+}: Props) {
   const groupedSignals = useMemo(() => groupSignals(signals), [signals]);
   const [expandedSymbols, setExpandedSymbols] = useState<Record<string, boolean>>({});
 
@@ -39,6 +45,7 @@ export default function GroupedSignalsList({ signals }: Props) {
     <div className="space-y-4">
       {groupedSignals.map((group) => {
         const isExpanded = expandedSymbols[group.symbol] ?? true;
+        const isWatched = watchlist.includes(group.symbol);
 
         const currentStrategySignals = group.signals.slice(0, 3);
         const historySignals = group.signals.slice(0, 8);
@@ -48,46 +55,67 @@ export default function GroupedSignalsList({ signals }: Props) {
             key={group.symbol}
             className={`rounded-lg border border-slate-200 bg-white shadow-sm ${getGroupRowClass(group.strongestAction)}`}
           >
-            <button
-              type="button"
-              onClick={() => toggleSymbol(group.symbol)}
-              className="flex w-full items-center justify-between gap-4 p-4 text-left"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-base font-semibold text-slate-900">
-                    {group.symbol}
-                  </h3>
+            <div className="flex items-start justify-between gap-4 p-4">
+              <button
+                type="button"
+                onClick={() => toggleSymbol(group.symbol)}
+                className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-base font-semibold text-slate-900">
+                      {group.symbol}
+                    </h3>
 
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${getActionBadgeClass(group.strongestAction)}`}
-                  >
-                    {group.strongestAction}
-                  </span>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${getActionBadgeClass(group.strongestAction)}`}
+                    >
+                      {group.strongestAction}
+                    </span>
+
+                    {group.hasConflict && (
+                      <span className="rounded-full border border-purple-200 bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
+                        Conflict
+                      </span>
+                    )}
+
+                    {isWatched && (
+                      <span className="rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
+                        Watched
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-1 text-sm text-slate-500">
+                    {group.signals.length} signal{group.signals.length > 1 ? "s" : ""} ·{" "}
+                    Latest: {formatDate(group.latestSignalDate)}
+                  </div>
 
                   {group.hasConflict && (
-                    <span className="rounded-full border border-purple-200 bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
-                      Conflict
-                    </span>
+                    <div className="mt-2 text-xs text-purple-700">
+                      Mixed signals: {group.distinctActions.filter((a) => a !== "HOLD").join(" + ")}
+                    </div>
                   )}
                 </div>
 
-                <div className="mt-1 text-sm text-slate-500">
-                  {group.signals.length} signal{group.signals.length > 1 ? "s" : ""} ·{" "}
-                  Latest: {formatDate(group.latestSignalDate)}
+                <div className="shrink-0 text-sm text-slate-500">
+                  {isExpanded ? "Hide" : "Show"}
                 </div>
+              </button>
 
-                {group.hasConflict && (
-                  <div className="mt-2 text-xs text-purple-700">
-                    Mixed signals: {group.distinctActions.filter((a) => a !== "HOLD").join(" + ")}
-                  </div>
-                )}
-              </div>
-
-              <div className="shrink-0 text-sm text-slate-500">
-                {isExpanded ? "Hide" : "Show"}
-              </div>
-            </button>
+              <button
+                type="button"
+                onClick={() => onToggleWatch(group.symbol)}
+                className={`shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                  isWatched
+                    ? "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-label={isWatched ? `Remove ${group.symbol} from watchlist` : `Add ${group.symbol} to watchlist`}
+              >
+                {isWatched ? "★ Watching" : "☆ Watch"}
+              </button>
+            </div>
 
             {isExpanded && (
               <div className="border-t border-slate-100 px-4 py-4">
