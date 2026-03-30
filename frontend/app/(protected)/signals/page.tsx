@@ -284,7 +284,12 @@ export default function SignalsPage() {
         </select>
       </div>
 
-      <GroupedSignalsList signals={sortedSignals as Signal[]} />
+      <GroupedSignalsList
+  signals={sortedSignals.map((s) => ({
+    ...s,
+    action: String(s.signal_type || "").toUpperCase(),
+  })) as Signal[]}
+/>
     </div>
   );
 }
