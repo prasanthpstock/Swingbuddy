@@ -54,21 +54,34 @@ export default function GroupedSignalsList({ signals }: Props) {
               className="flex w-full items-center justify-between gap-4 p-4 text-left"
             >
               <div className="min-w-0">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <h3 className="text-base font-semibold text-slate-900">
                     {group.symbol}
                   </h3>
+
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-medium ${getActionBadgeClass(group.strongestAction)}`}
                   >
                     {group.strongestAction}
                   </span>
+
+                  {group.hasConflict && (
+                    <span className="rounded-full border border-purple-200 bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
+                      Conflict
+                    </span>
+                  )}
                 </div>
 
                 <div className="mt-1 text-sm text-slate-500">
                   {group.signals.length} signal{group.signals.length > 1 ? "s" : ""} ·{" "}
                   Latest: {formatDate(group.latestSignalDate)}
                 </div>
+
+                {group.hasConflict && (
+                  <div className="mt-2 text-xs text-purple-700">
+                    Mixed signals: {group.distinctActions.filter((a) => a !== "HOLD").join(" + ")}
+                  </div>
+                )}
               </div>
 
               <div className="shrink-0 text-sm text-slate-500">
