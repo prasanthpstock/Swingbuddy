@@ -15,12 +15,17 @@ type SortOption =
   | "strategy_asc"
   | "strategy_desc";
 
-const WATCHLIST_STORAGE_KEY = "swingbuddy-watchlist";
+type WatchlistItem = {
+  id: string;
+  symbol: string;
+  created_at: string;
+};
 
 export default function SignalsPage() {
   const [signals, setSignals] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isWatchlistLoading, setIsWatchlistLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [showWatchedOnly, setShowWatchedOnly] = useState(false);
@@ -31,30 +36,8 @@ export default function SignalsPage() {
   const [sortBy, setSortBy] = useState<SortOption>("newest");
 
   useEffect(() => {
-    fetchSignals();
+    initializePage();
   }, []);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setWatchlist(parsed);
-      }
-    } catch (err) {
-      console.error("Failed to load watchlist", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist));
-    } catch (err) {
-      console.error("Failed to save watchlist", err);
-    }
-  }, [watchlist]);
 
   const getToken = () => {
     try {
@@ -84,34 +67,42 @@ export default function SignalsPage() {
     }
   };
 
-  const toggleWatch = (symbol: string) => {
-    setWatchlist((prev) =>
-      prev.includes(symbol)
-        ? prev.filter((item) => item !== symbol)
-        : [...prev, symbol]
-    );
+  const getApiUrlAndToken = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const token = getToken();
+
+    if (!apiUrl) {
+      setError("API configuration is missing.");
+      return null;
+    }
+
+    if (!token) {
+      setError("Access token missing. Please sign in again.");
+      return null;
+    }
+
+    return { apiUrl, token };
+  };
+
+  const initializePage = async () => {
+    setIsLoading(true);
+    setIsWatchlistLoading(true);
+    setError(null);
+
+    try {
+      await Promise.all([fetchSignals(), fetchWatchlist()]);
+    } finally {
+      setIsLoading(false);
+      setIsWatchlistLoading(false);
+    }
   };
 
   const fetchSignals = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
+      const auth = getApiUrlAndToken();
+      if (!auth) return;
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-      if (!apiUrl) {
-        console.error("NEXT_PUBLIC_API_URL is missing");
-        setError("API configuration is missing.");
-        return;
-      }
-
-      const token = getToken();
-
-      if (!token) {
-        console.error("Access token missing");
-        setError("Access token missing. Please sign in again.");
-        return;
-      }
+      const { apiUrl, token } = auth;
 
       const res = await fetch(`${apiUrl}/signals`, {
         headers: {
@@ -129,30 +120,83 @@ export default function SignalsPage() {
       const data = await res.json();
       setSignals(data);
     } catch (err) {
-      console.error("Fetch failed:", err);
+      console.error("Fetch signals failed:", err);
       setError("Failed to load signals.");
-    } finally {
-      setIsLoading(false);
+    }
+  };
+
+  const fetchWatchlist = async () => {
+    try {
+      const auth = getApiUrlAndToken();
+      if (!auth) return;
+
+      const { apiUrl, token } = auth;
+
+      const res = await fetch(`${apiUrl}/watchlist`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Watchlist API failed:", res.status, text);
+        setError("Failed to load watchlist.");
+        return;
+      }
+
+      const data: WatchlistItem[] = await res.json();
+      setWatchlist(data.map((item) => String(item.symbol || "").toUpperCase()));
+    } catch (err) {
+      console.error("Fetch watchlist failed:", err);
+      setError("Failed to load watchlist.");
+    }
+  };
+
+  const toggleWatch = async (symbol: string) => {
+    const normalizedSymbol = String(symbol || "").toUpperCase();
+    if (!normalizedSymbol) return;
+
+    const auth = getApiUrlAndToken();
+    if (!auth) return;
+
+    const { apiUrl, token } = auth;
+    const isWatched = watchlist.includes(normalizedSymbol);
+
+    try {
+      setError(null);
+
+      const res = await fetch(`${apiUrl}/watchlist/${normalizedSymbol}`, {
+        method: isWatched ? "DELETE" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Toggle watchlist failed:", res.status, text);
+        setError("Failed to update watchlist.");
+        return;
+      }
+
+      setWatchlist((prev) =>
+        isWatched
+          ? prev.filter((item) => item !== normalizedSymbol)
+          : [...prev, normalizedSymbol]
+      );
+    } catch (err) {
+      console.error("Toggle watchlist error:", err);
+      setError("Failed to update watchlist.");
     }
   };
 
   const generateSignals = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const auth = getApiUrlAndToken();
+      if (!auth) return;
 
-      if (!apiUrl) {
-        console.error("NEXT_PUBLIC_API_URL is missing");
-        setError("API configuration is missing.");
-        return;
-      }
-
-      const token = getToken();
-
-      if (!token) {
-        console.error("Access token missing");
-        setError("Access token missing. Please sign in again.");
-        return;
-      }
+      const { apiUrl, token } = auth;
 
       setIsGenerating(true);
       setError(null);
@@ -204,7 +248,7 @@ export default function SignalsPage() {
           .includes(searchQuery.toLowerCase());
 
       const matchesWatchlist =
-        !showWatchedOnly || watchlist.includes(String(signal.symbol || ""));
+        !showWatchedOnly || watchlist.includes(String(signal.symbol || "").toUpperCase());
 
       return (
         matchesStrategy &&
@@ -361,6 +405,7 @@ export default function SignalsPage() {
             type="checkbox"
             checked={showWatchedOnly}
             onChange={(e) => setShowWatchedOnly(e.target.checked)}
+            disabled={isWatchlistLoading}
           />
           Watched only
         </label>
