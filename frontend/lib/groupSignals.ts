@@ -1,7 +1,7 @@
 export type SignalAction = "BUY" | "SELL" | "RISK" | "HOLD";
 
 export type Signal = {
-  id: string;
+  id?: string;
   symbol: string;
   strategy: string;
   action: SignalAction;
@@ -13,6 +13,8 @@ export type GroupedSignal = {
   strongestAction: SignalAction;
   latestSignalDate: string;
   signals: Signal[];
+  hasConflict: boolean;
+  distinctActions: SignalAction[];
 };
 
 const actionPriority: Record<SignalAction, number> = {
@@ -50,11 +52,21 @@ export function groupSignals(signals: Signal[]): GroupedSignal[] {
           new Date(b.signal_date).getTime() - new Date(a.signal_date).getTime()
       );
 
+      const distinctActions = Array.from(
+        new Set(sortedSignals.map((signal) => signal.action))
+      ) as SignalAction[];
+
+      const nonHoldActions = distinctActions.filter((action) => action !== "HOLD");
+
+      const hasConflict = nonHoldActions.length > 1;
+
       return {
         symbol,
         strongestAction,
         latestSignalDate,
         signals: sortedSignals,
+        hasConflict,
+        distinctActions,
       };
     })
     .sort(
