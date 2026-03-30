@@ -45,26 +45,14 @@ export default function PortfolioPage() {
 
       const [holdingsRes, signalsRes] = await Promise.all([
         fetch(`${apiUrl}/portfolio/holdings`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${apiUrl}/signals`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
 
-      if (!holdingsRes.ok) {
-        console.error("Failed to fetch holdings");
-        return;
-      }
-
-      if (!signalsRes.ok) {
-        console.error("Failed to fetch signals");
-        return;
-      }
+      if (!holdingsRes.ok || !signalsRes.ok) return;
 
       const holdingsData = await holdingsRes.json();
       const signalsData = await signalsRes.json();
@@ -87,16 +75,10 @@ export default function PortfolioPage() {
 
       const res = await fetch(`${apiUrl}/portfolio/sync`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Portfolio sync failed:", res.status, text);
-        return;
-      }
+      if (!res.ok) return;
 
       await fetchPortfolioData();
     } catch (err) {
@@ -106,6 +88,7 @@ export default function PortfolioPage() {
     }
   };
 
+  // 🔥 FIX: pick latest signal per symbol
   const latestSignalBySymbol = useMemo(() => {
     const map = new Map<string, any>();
 
@@ -113,13 +96,44 @@ export default function PortfolioPage() {
       const symbol = signal.symbol;
       if (!symbol) continue;
 
-      if (!map.has(symbol)) {
+      const existing = map.get(symbol);
+
+      if (!existing) {
+        map.set(symbol, signal);
+        continue;
+      }
+
+      const existingTime = new Date(
+        existing.created_at || existing.signal_date || 0
+      ).getTime();
+
+      const currentTime = new Date(
+        signal.created_at || signal.signal_date || 0
+      ).getTime();
+
+      if (currentTime > existingTime) {
         map.set(symbol, signal);
       }
     }
 
     return map;
   }, [signals]);
+
+  // 🎨 Row highlight logic
+  const getRowClass = (signal: any) => {
+    const action = String(signal?.signal_type || "").toUpperCase();
+
+    switch (action) {
+      case "SELL":
+        return "bg-red-50 hover:bg-red-100";
+      case "RISK":
+        return "bg-orange-50 hover:bg-orange-100";
+      case "BUY":
+        return "bg-green-50 hover:bg-green-100";
+      default:
+        return "hover:bg-slate-50";
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -162,15 +176,23 @@ export default function PortfolioPage() {
                 return (
                   <tr
                     key={idx}
-                    className="border-b last:border-b-0 hover:bg-slate-50"
+                    className={`border-b last:border-b-0 ${getRowClass(
+                      latestSignal
+                    )}`}
                   >
                     <td className="p-3 font-medium">{holding.symbol}</td>
                     <td className="p-3">{holding.quantity}</td>
-                    <td className="p-3">₹{Number(holding.avg_price).toFixed(2)}</td>
-                    <td className="p-3">₹{Number(holding.ltp).toFixed(2)}</td>
+                    <td className="p-3">
+                      ₹{Number(holding.avg_price).toFixed(2)}
+                    </td>
+                    <td className="p-3">
+                      ₹{Number(holding.ltp).toFixed(2)}
+                    </td>
                     <td
                       className={`p-3 font-medium ${
-                        Number(holding.pnl) >= 0 ? "text-green-600" : "text-red-600"
+                        Number(holding.pnl) >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
                       }`}
                     >
                       ₹{Number(holding.pnl).toFixed(2)}
