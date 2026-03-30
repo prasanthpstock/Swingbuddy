@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from supabase import Client
 
-from app.api.deps.auth import get_current_user
+from app.api.deps import get_current_user_id
 from app.db.supabase import get_supabase
 
 router = APIRouter()
@@ -9,11 +9,9 @@ router = APIRouter()
 
 @router.get("")
 def get_watchlist(
-    current_user=Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     supabase: Client = Depends(get_supabase),
 ):
-    user_id = current_user["id"]
-
     result = (
         supabase.table("watchlist")
         .select("id, symbol, created_at")
@@ -28,10 +26,9 @@ def get_watchlist(
 @router.post("/{symbol}")
 def add_to_watchlist(
     symbol: str,
-    current_user=Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     supabase: Client = Depends(get_supabase),
 ):
-    user_id = current_user["id"]
     normalized_symbol = symbol.strip().upper()
 
     if not normalized_symbol:
@@ -70,10 +67,9 @@ def add_to_watchlist(
 @router.delete("/{symbol}")
 def remove_from_watchlist(
     symbol: str,
-    current_user=Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     supabase: Client = Depends(get_supabase),
 ):
-    user_id = current_user["id"]
     normalized_symbol = symbol.strip().upper()
 
     if not normalized_symbol:
