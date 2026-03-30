@@ -15,11 +15,15 @@ type SortOption =
   | "strategy_asc"
   | "strategy_desc";
 
+const WATCHLIST_STORAGE_KEY = "swingbuddy-watchlist";
+
 export default function SignalsPage() {
   const [signals, setSignals] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [showWatchedOnly, setShowWatchedOnly] = useState(false);
 
   const [strategyFilter, setStrategyFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
@@ -29,6 +33,28 @@ export default function SignalsPage() {
   useEffect(() => {
     fetchSignals();
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setWatchlist(parsed);
+      }
+    } catch (err) {
+      console.error("Failed to load watchlist", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist));
+    } catch (err) {
+      console.error("Failed to save watchlist", err);
+    }
+  }, [watchlist]);
 
   const getToken = () => {
     try {
@@ -56,6 +82,14 @@ export default function SignalsPage() {
       console.error("Token parse error", err);
       return null;
     }
+  };
+
+  const toggleWatch = (symbol: string) => {
+    setWatchlist((prev) =>
+      prev.includes(symbol)
+        ? prev.filter((item) => item !== symbol)
+        : [...prev, symbol]
+    );
   };
 
   const fetchSignals = async () => {
@@ -169,9 +203,17 @@ export default function SignalsPage() {
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
 
-      return matchesStrategy && matchesAction && matchesSearch;
+      const matchesWatchlist =
+        !showWatchedOnly || watchlist.includes(String(signal.symbol || ""));
+
+      return (
+        matchesStrategy &&
+        matchesAction &&
+        matchesSearch &&
+        matchesWatchlist
+      );
     });
-  }, [signals, strategyFilter, actionFilter, searchQuery]);
+  }, [signals, strategyFilter, actionFilter, searchQuery, showWatchedOnly, watchlist]);
 
   const sortedSignals = useMemo(() => {
     const items = [...filteredSignals];
@@ -266,7 +308,7 @@ export default function SignalsPage() {
         {summaryCounts.hold}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
         <select
           value={strategyFilter}
           onChange={(e) => setStrategyFilter(e.target.value)}
@@ -313,7 +355,23 @@ export default function SignalsPage() {
           <option value="strategy_asc">Sort: Strategy A-Z</option>
           <option value="strategy_desc">Sort: Strategy Z-A</option>
         </select>
+
+        <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={showWatchedOnly}
+            onChange={(e) => setShowWatchedOnly(e.target.checked)}
+          />
+          Watched only
+        </label>
       </div>
+
+      {watchlist.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Watching {watchlist.length} symbol{watchlist.length === 1 ? "" : "s"}:{" "}
+          {watchlist.join(", ")}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
@@ -324,7 +382,11 @@ export default function SignalsPage() {
           No signals found. Try generating signals or adjusting your filters.
         </div>
       ) : (
-        <GroupedSignalsList signals={groupedSignalsInput} />
+        <GroupedSignalsList
+          signals={groupedSignalsInput}
+          watchlist={watchlist}
+          onToggleWatch={toggleWatch}
+        />
       )}
     </div>
   );
