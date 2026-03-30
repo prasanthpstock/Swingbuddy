@@ -36,6 +36,15 @@ export default function PortfolioPage() {
     }
   };
 
+  const [expandedSymbols, setExpandedSymbols] = useState<Record<string, boolean>>({});
+
+const toggleSymbolTimeline = (symbol: string) => {
+  setExpandedSymbols((prev) => ({
+    ...prev,
+    [symbol]: !prev[symbol],
+  }));
+};
+  
   const fetchPortfolioData = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
