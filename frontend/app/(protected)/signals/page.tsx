@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SignalsSummary } from "@/components/signals/SignalsSummary";
+import { WatchlistAlertsPanel } from "@/components/signals/WatchlistAlertsPanel";
 import GroupedSignalsList from "@/components/GroupedSignalsList";
 import type { Signal } from "@/lib/groupSignals";
 
@@ -21,11 +22,22 @@ type WatchlistItem = {
   created_at: string;
 };
 
+type WatchlistAlert = {
+  id: string;
+  symbol: string;
+  signal_type: string;
+  strategy: string;
+  signal_date: string;
+  created_at: string;
+};
+
 export default function SignalsPage() {
   const [signals, setSignals] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<WatchlistAlert[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isWatchlistLoading, setIsWatchlistLoading] = useState(true);
+  const [isAlertsLoading, setIsAlertsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [showWatchedOnly, setShowWatchedOnly] = useState(false);
@@ -87,13 +99,15 @@ export default function SignalsPage() {
   const initializePage = async () => {
     setIsLoading(true);
     setIsWatchlistLoading(true);
+    setIsAlertsLoading(true);
     setError(null);
 
     try {
-      await Promise.all([fetchSignals(), fetchWatchlist()]);
+      await Promise.all([fetchSignals(), fetchWatchlist(), fetchWatchlistAlerts()]);
     } finally {
       setIsLoading(false);
       setIsWatchlistLoading(false);
+      setIsAlertsLoading(false);
     }
   };
 
@@ -153,6 +167,34 @@ export default function SignalsPage() {
     }
   };
 
+  const fetchWatchlistAlerts = async () => {
+    try {
+      const auth = getApiUrlAndToken();
+      if (!auth) return;
+
+      const { apiUrl, token } = auth;
+
+      const res = await fetch(`${apiUrl}/alerts/watchlist`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Watchlist alerts API failed:", res.status, text);
+        setError("Failed to load watched alerts.");
+        return;
+      }
+
+      const data: WatchlistAlert[] = await res.json();
+      setAlerts(data);
+    } catch (err) {
+      console.error("Fetch watchlist alerts failed:", err);
+      setError("Failed to load watched alerts.");
+    }
+  };
+
   const toggleWatch = async (symbol: string) => {
     const normalizedSymbol = String(symbol || "").toUpperCase();
     if (!normalizedSymbol) return;
@@ -185,6 +227,10 @@ export default function SignalsPage() {
           ? prev.filter((item) => item !== normalizedSymbol)
           : [...prev, normalizedSymbol]
       );
+
+      if (isWatched && showWatchedOnly) {
+        setShowWatchedOnly(false);
+      }
     } catch (err) {
       console.error("Toggle watchlist error:", err);
       setError("Failed to update watchlist.");
@@ -215,7 +261,7 @@ export default function SignalsPage() {
         return;
       }
 
-      await fetchSignals();
+      await Promise.all([fetchSignals(), fetchWatchlistAlerts()]);
     } catch (err) {
       console.error("Generate signals error:", err);
       setError("Failed to generate signals.");
@@ -340,6 +386,8 @@ export default function SignalsPage() {
           {error}
         </div>
       )}
+
+      <WatchlistAlertsPanel alerts={alerts} isLoading={isAlertsLoading} />
 
       <SignalsSummary signals={sortedSignals} />
 
