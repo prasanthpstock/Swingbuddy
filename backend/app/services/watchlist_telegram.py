@@ -14,7 +14,6 @@ def send_watchlist_alerts_to_telegram(
     if not alerts:
         return
 
-    # Adjust this table/query to match your existing telegram storage.
     telegram_rows = (
         supabase.table("telegram_connections")
         .select("chat_id")
@@ -34,6 +33,6 @@ def send_watchlist_alerts_to_telegram(
         return
 
     for alert in alerts:
-        text = format_watchlist_alert_message(alert)
+        text = alert.get("message_override") or format_watchlist_alert_message(alert)
         result = send_telegram_message(chat_id, text)
         print(f"[TELEGRAM] Sent alert for {alert.get('symbol')}: {result}")
