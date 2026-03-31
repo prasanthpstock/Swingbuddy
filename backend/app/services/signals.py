@@ -10,9 +10,6 @@ from app.services.strategies.pnl_strategy import generate_pnl_signal
 from app.services.watchlist_alerts import create_watchlist_alerts
 from app.services.watchlist_telegram import send_watchlist_alerts_to_telegram
 
-# NEW
-from app.services.watchlist_alerts import create_watchlist_alerts
-
 
 def get_signals_for_user(user_id: str) -> list[dict]:
     supabase = get_supabase_admin()
@@ -252,17 +249,21 @@ def generate_signals_for_user(user_id: str) -> dict:
                         }
                     )
 
-    # 🔥 NEW: create watchlist alerts
     if created_signals:
-    created_alerts = create_watchlist_alerts(supabase, created_signals)
+        created_alerts = create_watchlist_alerts(supabase, created_signals)
 
-    if created_alerts:
-        alerts_by_user: dict[str, list[dict]] = {}
-        for alert in created_alerts:
-            alerts_by_user.setdefault(alert["user_id"], []).append(alert)
+        if created_alerts:
+            alerts_by_user: dict[str, list[dict]] = {}
 
-        for alert_user_id, user_alerts in alerts_by_user.items():
-            send_watchlist_alerts_to_telegram(supabase, alert_user_id, user_alerts)
+            for alert in created_alerts:
+                alerts_by_user.setdefault(alert["user_id"], []).append(alert)
+
+            for alert_user_id, user_alerts in alerts_by_user.items():
+                send_watchlist_alerts_to_telegram(
+                    supabase,
+                    alert_user_id,
+                    user_alerts,
+                )
 
     if errors:
         return {
