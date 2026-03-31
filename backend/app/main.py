@@ -9,6 +9,7 @@ from app.api.routes.logs import router as logs_router
 from app.api.routes.telegram import router as telegram_router
 from app.api.routes.internal import router as internal_router
 from app.api.routes.watchlist import router as watchlist_router
+from app.api.routes.watchlist_alerts import router as watchlist_alerts_router
 
 app = FastAPI(title="Personal Trading App API", version="0.1.0")
 
@@ -33,7 +34,7 @@ app.include_router(logs_router, prefix="/logs", tags=["logs"])
 app.include_router(telegram_router, prefix="/telegram", tags=["telegram"])
 app.include_router(internal_router, prefix="/internal", tags=["internal"])
 app.include_router(watchlist_router, prefix="/watchlist", tags=["watchlist"])
-
+app.include_router(watchlist_alerts_router, prefix="/alerts/watchlist", tags=["watchlist-alerts"])
 
 @app.get("/")
 def root():
