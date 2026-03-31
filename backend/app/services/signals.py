@@ -8,6 +8,9 @@ from app.services.strategies.breakout_strategy import generate_breakout_signal
 from app.services.strategies.moving_avg_strategy import generate_moving_avg_signal
 from app.services.strategies.pnl_strategy import generate_pnl_signal
 
+# NEW
+from app.services.watchlist_alerts import create_watchlist_alerts
+
 
 def get_signals_for_user(user_id: str) -> list[dict]:
     supabase = get_supabase_admin()
@@ -223,11 +226,8 @@ def generate_signals_for_user(user_id: str) -> dict:
                 created_signals.append(
                     {
                         "symbol": symbol,
-                        "action": signal["signal_type"].upper(),
                         "strategy": strategy,
-                        "reason": signal["notes"],
-                        "price": signal["price"],
-                        "pnl": float(item.get("pnl") or 0),
+                        "signal_type": signal["signal_type"],
                         "signal_date": signal_date,
                     }
                 )
@@ -249,6 +249,10 @@ def generate_signals_for_user(user_id: str) -> dict:
                             "error": message,
                         }
                     )
+
+    # 🔥 NEW: create watchlist alerts
+    if created_signals:
+        create_watchlist_alerts(supabase, created_signals)
 
     if errors:
         return {
