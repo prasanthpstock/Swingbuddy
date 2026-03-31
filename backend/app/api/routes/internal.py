@@ -1,8 +1,10 @@
 import traceback
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
+from app.api.deps import get_current_user_id
 from app.core.config import settings
+from app.services.daily_summary import send_daily_summary_for_user
 from app.services.jobs import run_daily_signal_job
 
 router = APIRouter()
@@ -24,3 +26,8 @@ async def run_daily_signals_job(
         print("[INTERNAL JOB ROUTE] Unhandled error:")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/daily-summary")
+def run_daily_summary(user_id: str = Depends(get_current_user_id)) -> dict:
+    return send_daily_summary_for_user(user_id)
