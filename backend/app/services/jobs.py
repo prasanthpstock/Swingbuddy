@@ -1,6 +1,7 @@
 import traceback
 
 from app.core.supabase import get_supabase_admin
+from app.services.daily_summary import send_daily_summary_for_user
 from app.services.holdings_sync import sync_holdings_for_user
 from app.services.signal_alerts import send_signal_alerts_for_user
 from app.services.signals import generate_signals_for_user
@@ -34,6 +35,8 @@ async def run_daily_signal_job() -> dict:
         total_skipped_signals = 0
         total_telegram_sent = 0
         total_telegram_failed = 0
+        total_daily_summaries_sent = 0
+        total_daily_summaries_failed = 0
 
         for connection in connections:
             user_id = connection.get("user_id")
@@ -88,6 +91,19 @@ async def run_daily_signal_job() -> dict:
                 print(traceback.format_exc())
                 user_result["telegram"] = {"status": "error", "message": str(e)}
 
+            try:
+                daily_summary_result = send_daily_summary_for_user(user_id)
+                print(f"[JOB] Daily summary result for {user_id}: {daily_summary_result}")
+                user_result["daily_summary"] = daily_summary_result
+
+                total_daily_summaries_sent += 1
+
+            except Exception as e:
+                print(f"[JOB] Daily summary failed for {user_id}:")
+                print(traceback.format_exc())
+                user_result["daily_summary"] = {"status": "error", "message": str(e)}
+                total_daily_summaries_failed += 1
+
             results.append(user_result)
 
         return {
@@ -97,6 +113,8 @@ async def run_daily_signal_job() -> dict:
             "skipped_signals": total_skipped_signals,
             "telegram_sent": total_telegram_sent,
             "telegram_failed": total_telegram_failed,
+            "daily_summaries_sent": total_daily_summaries_sent,
+            "daily_summaries_failed": total_daily_summaries_failed,
             "results": results,
         }
 
