@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from kiteconnect import KiteConnect
 
@@ -6,7 +6,7 @@ from app.core.config import settings
 
 
 class ZerodhaAdapter:
-    def __init__(self, access_token: str | None = None) -> None:
+    def __init__(self, access_token: Optional[str] = None) -> None:
         self.client = KiteConnect(api_key=settings.zerodha_api_key)
         if access_token:
             self.client.set_access_token(access_token)
@@ -65,7 +65,7 @@ class ZerodhaAdapter:
         self,
         symbol: str,
         exchange: str = "NSE",
-    ) -> int | None:
+    ) -> Optional[int]:
         self._load_instrument_cache_for_exchange(exchange)
         return self._instrument_cache.get(exchange, {}).get(symbol)
 
