@@ -1,4 +1,5 @@
 import urllib.parse
+from typing import Optional   # ✅ add this
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -25,9 +26,9 @@ def start_zerodha_auth(user_id: str = Depends(get_current_user_id)) -> dict:
 @router.get("/broker/zerodha/callback")
 def zerodha_callback(
     request_token: str = Query(...),
-    user_id: str | None = Query(default=None),
-    action: str | None = Query(default=None),
-    status: str | None = Query(default=None),
+    user_id: Optional[str] = Query(default=None),   # ✅ fixed
+    action: Optional[str] = Query(default=None),    # ✅ fixed
+    status: Optional[str] = Query(default=None),    # ✅ fixed
 ) -> RedirectResponse:
     try:
         if not user_id:
