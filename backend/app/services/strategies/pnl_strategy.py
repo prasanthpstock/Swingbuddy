@@ -1,30 +1,36 @@
-def generate_pnl_signal(item: dict) -> dict | None:
+from typing import Optional
+
+
+def generate_pnl_signal(item: dict) -> Optional[dict]:
     symbol = item.get("symbol")
-    if not symbol:
+    pnl = item.get("pnl")
+    last_price = item.get("last_price") or item.get("ltp") or item.get("price")
+
+    if not symbol or pnl is None:
         return None
 
-    pnl = float(item.get("pnl") or 0)
-    avg_price = float(item.get("avg_price") or 0)
-    quantity = float(item.get("quantity") or 0)
-    ltp = float(item.get("ltp") or 0)
+    try:
+        pnl_value = float(pnl)
+    except (TypeError, ValueError):
+        return None
 
-    invested = avg_price * quantity
-    pnl_pct = (pnl / invested * 100) if invested > 0 else 0
+    signal_type = None
+    notes = None
 
-    if pnl_pct > 5:
-        signal_type = "sell"
-        notes = f"Profit at {round(pnl_pct, 2)}% - consider booking"
-    elif pnl_pct < -3:
-        signal_type = "risk"
-        notes = f"Loss at {round(pnl_pct, 2)}% - consider stop loss"
-    else:
-        signal_type = "hold"
-        notes = f"Stable position ({round(pnl_pct, 2)}%)"
+    if pnl_value >= 0:
+        signal_type = "HOLD"
+        notes = f"Position in profit: PnL {pnl_value:.2f}"
+    elif pnl_value < 0:
+        signal_type = "REVIEW"
+        notes = f"Position in loss: PnL {pnl_value:.2f}"
+
+    if not signal_type:
+        return None
 
     return {
         "symbol": symbol,
-        "strategy": "pnl_v1",
+        "strategy": "pnl",
         "signal_type": signal_type,
-        "price": ltp,
+        "price": float(last_price) if last_price is not None else 0.0,
         "notes": notes,
     }

@@ -1,33 +1,34 @@
-def generate_breakout_signal(item: dict, candles: list[dict]) -> dict | None:
+from typing import Optional
+
+
+def generate_breakout_signal(item: dict, candles: list[dict]) -> Optional[dict]:
     symbol = item.get("symbol")
     if not symbol or len(candles) < 21:
         return None
 
-    latest = candles[-1]
-    previous_20 = candles[-21:-1]
+    recent = candles[-21:]
+    latest = recent[-1]
+    previous_20 = recent[:-1]
 
-    latest_close = float(latest.get("close") or 0)
-    latest_volume = float(latest.get("volume") or 0)
+    latest_close = latest.get("close")
+    latest_high = latest.get("high")
 
-    resistance = max(float(c.get("high") or 0) for c in previous_20)
-    avg_volume = sum(float(c.get("volume") or 0) for c in previous_20) / len(previous_20)
+    if latest_close is None or latest_high is None:
+        return None
 
-    price_breakout = latest_close > resistance
-    volume_confirmed = avg_volume > 0 and latest_volume > (1.5 * avg_volume)
+    breakout_level = max(
+        candle.get("high", 0)
+        for candle in previous_20
+        if candle.get("high") is not None
+    )
 
-    if not (price_breakout and volume_confirmed):
-        print(
-            f"[BREAKOUT][CHECK] {symbol} "
-            f"close={latest_close} resistance={round(resistance, 2)} "
-            f"latest_volume={latest_volume} avg_volume={round(avg_volume, 2)} "
-            f"price_breakout={price_breakout} volume_confirmed={volume_confirmed}"
-        )
+    if latest_high <= breakout_level:
         return None
 
     return {
         "symbol": symbol,
-        "strategy": "breakout_v1",
-        "signal_type": "buy",
+        "strategy": "breakout",
+        "signal_type": "BUY",
         "price": latest_close,
-        "notes": f"Breakout above 20-day high ({round(resistance, 2)}) with volume confirmation",
+        "notes": f"20-day breakout above {breakout_level}",
     }

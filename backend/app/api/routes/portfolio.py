@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from typing import Optional
 
 from app.api.deps import get_current_user_id
 from app.core.supabase import get_supabase_admin
@@ -7,7 +8,7 @@ from app.services.holdings_sync import sync_holdings_for_user
 router = APIRouter()
 
 
-def _get_latest_snapshot(user_id: str) -> dict | None:
+def _get_latest_snapshot(user_id: str) -> Optional[dict]:
     response = (
         get_supabase_admin()
         .table("portfolio_snapshots")

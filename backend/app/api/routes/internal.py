@@ -1,4 +1,5 @@
 import traceback
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
@@ -12,7 +13,7 @@ router = APIRouter()
 
 @router.post("/jobs/daily-signals")
 async def run_daily_signals_job(
-    x_internal_job_secret: str | None = Header(default=None),
+    x_internal_job_secret: Optional[str] = Header(default=None),
 ) -> dict:
     if not settings.internal_job_secret:
         raise HTTPException(status_code=500, detail="Missing INTERNAL_JOB_SECRET")

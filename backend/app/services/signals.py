@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from app.brokers.zerodha import ZerodhaAdapter
 from app.core.config import settings
@@ -42,7 +43,7 @@ def get_signals_for_user(user_id: str) -> list[dict]:
     return response.data or []
 
 
-def _get_latest_snapshot_id(user_id: str) -> str | None:
+def _get_latest_snapshot_id(user_id: str) -> Optional[str]:
     response = (
         get_supabase_admin()
         .table("portfolio_snapshots")
@@ -60,7 +61,7 @@ def _get_latest_snapshot_id(user_id: str) -> str | None:
     return rows[0]["id"]
 
 
-def _get_zerodha_adapter_for_user(user_id: str) -> ZerodhaAdapter | None:
+def _get_zerodha_adapter_for_user(user_id: str) -> Optional[ZerodhaAdapter]:
     supabase = get_supabase_admin()
 
     connections = (
@@ -86,9 +87,9 @@ def _get_zerodha_adapter_for_user(user_id: str) -> ZerodhaAdapter | None:
 
 
 def _get_historical_candles_for_symbol(
-    adapter: ZerodhaAdapter | None,
+    adapter: Optional[ZerodhaAdapter],
     symbol: str,
-    exchange: str | None,
+    exchange: Optional[str],
 ) -> list[dict]:
     if not adapter or not symbol:
         return []
@@ -113,7 +114,7 @@ def _get_historical_candles_for_symbol(
 
 def _build_signals_for_holding(
     item: dict,
-    adapter: ZerodhaAdapter | None,
+    adapter: Optional[ZerodhaAdapter],
 ) -> list[dict]:
     signals: list[dict] = []
 
