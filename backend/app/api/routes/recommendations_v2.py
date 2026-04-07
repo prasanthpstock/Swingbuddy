@@ -1,15 +1,132 @@
 from datetime import date
 
 import pandas as pd
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.core.supabase import get_supabase_admin
 from app.services.indicators import IndicatorService
-from app.services.recommendation_engine import RecommendationEngine, StrategyConfig
 from app.services.yahoo_finance import YahooFinanceService
-from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/api/v2", tags=["recommendations"])
+
+
+def _safe_float(value):
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return float(value)
+
+
+def _safe_int(value):
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return int(value)
+
+
+def _build_simple_recommendation(last_row, capital=500000, risk_pct=0.01):
+    close = _safe_float(last_row.get("close"))
+    breakout = _safe_float(last_row.get("breakout_20_high_prev"))
+    sma_20 = _safe_float(last_row.get("sma_20"))
+    sma_50 = _safe_float(last_row.get("sma_50"))
+    ema_20 = _safe_float(last_row.get("ema_20"))
+    rsi_14 = _safe_float(last_row.get("rsi_14"))
+    atr_14 = _safe_float(last_row.get("atr_14"))
+    volume = _safe_float(last_row.get("volume"))
+    volume_avg_20 = _safe_float(last_row.get("volume_avg_20"))
+    momentum_20d = _safe_float(last_row.get("momentum_20d"))
+
+    if close is None or breakout is None or atr_14 is None or atr_14 <= 0:
+        return None
+
+    score = 0
+    rationale_parts = []
+    factor_breakdown = {}
+
+    near_breakout = close >= breakout * 0.99
+    above_breakout = close >= breakout
+    trend_ok = sma_20 is not None and sma_50 is not None and close > sma_20 > sma_50
+    ema_ok = ema_20 is not None and close > ema_20
+    rsi_ok = rsi_14 is not None and 50 <= rsi_14 <= 75
+    momentum_ok = momentum_20d is not None and momentum_20d > -2
+    volume_ok = (
+        volume is not None
+        and volume_avg_20 is not None
+        and volume_avg_20 > 0
+        and volume >= volume_avg_20 * 1.0
+    )
+
+    if near_breakout:
+        score += 25
+        factor_breakdown["near_breakout"] = 25
+        rationale_parts.append("Price is near breakout range")
+
+    if above_breakout:
+        score += 20
+        factor_breakdown["above_breakout"] = 20
+        rationale_parts.append("Price is above breakout level")
+
+    if trend_ok:
+        score += 20
+        factor_breakdown["trend_alignment"] = 20
+        rationale_parts.append("Trend alignment above SMA20 and SMA50")
+
+    if ema_ok:
+        score += 10
+        factor_breakdown["ema_support"] = 10
+        rationale_parts.append("Price is above EMA20")
+
+    if rsi_ok:
+        score += 10
+        factor_breakdown["rsi_support"] = 10
+        rationale_parts.append("RSI is in bullish range")
+
+    if momentum_ok:
+        score += 10
+        factor_breakdown["momentum_support"] = 10
+        rationale_parts.append("Momentum is supportive")
+
+    if volume_ok:
+        score += 5
+        factor_breakdown["volume_support"] = 5
+        rationale_parts.append("Volume is above average")
+
+    if score < 45:
+        return None
+
+    entry_price = round(close, 2)
+    stop_loss = round(close - atr_14 * 1.5, 2)
+    target_price = round(close + (close - stop_loss) * 2.0, 2)
+
+    risk_per_share = entry_price - stop_loss
+    if risk_per_share <= 0:
+        return None
+
+    risk_capital = capital * risk_pct
+    position_qty = max(int(risk_capital / risk_per_share), 1)
+    risk_reward = round((target_price - entry_price) / risk_per_share, 2)
+
+    signal_type = "BREAKOUT" if above_breakout else "BUY"
+
+    return {
+        "signal_type": signal_type,
+        "score": round(score, 2),
+        "entry_price": entry_price,
+        "stop_loss": stop_loss,
+        "target_price": target_price,
+        "risk_reward": risk_reward,
+        "position_qty": position_qty,
+        "rationale": "; ".join(rationale_parts) if rationale_parts else "Rule-based setup",
+        "factor_breakdown": factor_breakdown,
+    }
 
 
 @router.post("/market-data/sync")
@@ -27,7 +144,8 @@ def sync_market_data():
     inserted = 0
 
     for inst in instruments:
-        df = YahooFinanceService.fetch_daily_bars(inst["yahoo_symbol"], period="6mo")
+        yahoo_symbol = inst.get("yahoo_symbol") or inst.get("symbol")
+        df = YahooFinanceService.fetch_daily_bars(yahoo_symbol, period="6mo")
         if df.empty:
             continue
 
@@ -43,12 +161,12 @@ def sync_market_data():
                 {
                     "instrument_id": inst["id"],
                     "trade_date": trade_date,
-                    "open": float(row["open"]),
-                    "high": float(row["high"]),
-                    "low": float(row["low"]),
-                    "close": float(row["close"]),
-                    "adj_close": None if pd.isna(row["adj_close"]) else float(row["adj_close"]),
-                    "volume": int(row["volume"]),
+                    "open": _safe_float(row.get("open")),
+                    "high": _safe_float(row.get("high")),
+                    "low": _safe_float(row.get("low")),
+                    "close": _safe_float(row.get("close")),
+                    "adj_close": _safe_float(row.get("adj_close")),
+                    "volume": _safe_int(row.get("volume")),
                     "source": "yahoo_finance",
                 }
             )
@@ -94,7 +212,6 @@ def generate_recommendations():
                     "capital": 500000,
                     "risk_pct": 0.01,
                     "max_recommendations": 5,
-                    "breakout_tolerance": 0.99,
                 },
             }
         )
@@ -102,15 +219,15 @@ def generate_recommendations():
     )
 
     run_id = run_response.data[0]["id"]
-    cfg = StrategyConfig(
-        target_rr=2.0,
-        max_recommendations=5,
-        breakout_tolerance=0.99,
-    )
 
     generated = []
     instruments_seen = 0
     snapshots_upserted = 0
+
+    # optional cleanup for reruns on same day
+    supabase.table("recommendations").delete().eq("trade_date", run_date).eq(
+        "strategy_code", "breakout_v2"
+    ).execute()
 
     for inst in instruments:
         bars = (
@@ -131,69 +248,71 @@ def generate_recommendations():
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
         ind_df = IndicatorService.compute(df)
-        last = ind_df.iloc[-1]
+        last = ind_df.iloc[-1].to_dict()
 
         supabase.table("indicator_snapshots").upsert(
             {
                 "instrument_id": inst["id"],
                 "trade_date": run_date,
-                "sma_20": None if pd.isna(last["sma_20"]) else float(last["sma_20"]),
-                "sma_50": None if pd.isna(last["sma_50"]) else float(last["sma_50"]),
-                "ema_20": None if pd.isna(last["ema_20"]) else float(last["ema_20"]),
-                "rsi_14": None if pd.isna(last["rsi_14"]) else float(last["rsi_14"]),
-                "atr_14": None if pd.isna(last["atr_14"]) else float(last["atr_14"]),
-                "volume_avg_20": None if pd.isna(last["volume_avg_20"]) else float(last["volume_avg_20"]),
-                "breakout_20_high_prev": None if pd.isna(last["breakout_20_high_prev"]) else float(last["breakout_20_high_prev"]),
-                "momentum_20d": None if pd.isna(last["momentum_20d"]) else float(last["momentum_20d"]),
+                "sma_20": _safe_float(last.get("sma_20")),
+                "sma_50": _safe_float(last.get("sma_50")),
+                "ema_20": _safe_float(last.get("ema_20")),
+                "rsi_14": _safe_float(last.get("rsi_14")),
+                "atr_14": _safe_float(last.get("atr_14")),
+                "volume_avg_20": _safe_float(last.get("volume_avg_20")),
+                "breakout_20_high_prev": _safe_float(last.get("breakout_20_high_prev")),
+                "momentum_20d": _safe_float(last.get("momentum_20d")),
                 "payload": {},
             },
             on_conflict="instrument_id,trade_date",
         ).execute()
         snapshots_upserted += 1
 
-        rec = RecommendationEngine.build_recommendation(
-            last,
-            capital=500000,
-            risk_pct=0.01,
-            cfg=cfg,
-        )
+        rec = _build_simple_recommendation(last)
         if not rec:
             continue
 
-        generated.append((inst, last, rec))
+        generated.append((inst, rec))
 
-    generated.sort(key=lambda x: x[2]["score"], reverse=True)
-    generated = generated[: cfg.max_recommendations]
+    generated.sort(key=lambda x: x[1]["score"], reverse=True)
+    generated = generated[:5]
 
     created = []
 
-    for rank, (inst, last, rec) in enumerate(generated, start=1):
-        supabase.table("recommendations").insert(
-            {
-                "run_id": run_id,
-                "instrument_id": inst["id"],
-                "trade_date": run_date,
-                "signal_type": rec["signal_type"],
-                "strategy_code": "breakout_v2",
-                "score": rec["score"],
-                "rank_no": rank,
-                "confidence": round(rec["score"] / 100, 4),
-                "entry_price": rec["entry_price"],
-                "stop_loss": rec["stop_loss"],
-                "target_price": rec["target_price"],
-                "risk_reward": rec["risk_reward"],
-                "position_qty": rec["position_qty"],
-                "capital_assumed": 500000,
-                "rationale": rec["rationale"],
-                "factor_breakdown": rec["factor_breakdown"],
-                "status": "new",
-            }
-        ).execute()
+    for rank, (inst, rec) in enumerate(generated, start=1):
+        inserted = (
+            supabase.table("recommendations")
+            .insert(
+                {
+                    "run_id": run_id,
+                    "instrument_id": inst["id"],
+                    "trade_date": run_date,
+                    "signal_type": rec["signal_type"],
+                    "strategy_code": "breakout_v2",
+                    "score": rec["score"],
+                    "rank_no": rank,
+                    "confidence": round(rec["score"] / 100, 4),
+                    "entry_price": rec["entry_price"],
+                    "stop_loss": rec["stop_loss"],
+                    "target_price": rec["target_price"],
+                    "risk_reward": rec["risk_reward"],
+                    "position_qty": rec["position_qty"],
+                    "capital_assumed": 500000,
+                    "rationale": rec["rationale"],
+                    "factor_breakdown": rec["factor_breakdown"],
+                    "status": "new",
+                }
+            )
+            .execute()
+        )
 
+        row = inserted.data[0] if inserted.data else None
         created.append(
             {
+                "id": row["id"] if row else None,
                 "symbol": inst["symbol"],
                 "score": rec["score"],
+                "signal_type": rec["signal_type"],
                 "entry_price": rec["entry_price"],
                 "stop_loss": rec["stop_loss"],
                 "target_price": rec["target_price"],
@@ -201,9 +320,9 @@ def generate_recommendations():
             }
         )
 
-    supabase.table("recommendation_runs").update(
-        {"status": "completed"}
-    ).eq("id", run_id).execute()
+    supabase.table("recommendation_runs").update({"status": "completed"}).eq(
+        "id", run_id
+    ).execute()
 
     return {
         "status": "success",
@@ -258,7 +377,8 @@ def list_recommendations():
         }
         for row in rows
     ]
-    
+
+
 @router.get("/indicators")
 def list_indicators():
     supabase = get_supabase_admin()
@@ -297,7 +417,8 @@ def list_indicators():
         }
         for row in snapshots
     ]
-    
+
+
 @router.post("/recommendations/{recommendation_id}/actions")
 def create_recommendation_action(recommendation_id: str, payload: dict):
     supabase = get_supabase_admin()
@@ -325,16 +446,14 @@ def create_recommendation_action(recommendation_id: str, payload: dict):
         "notes": payload.get("notes"),
     }
 
-    inserted = (
-        supabase.table("recommendation_actions")
-        .insert(row)
-        .execute()
-    )
+    inserted = supabase.table("recommendation_actions").insert(row).execute()
 
     return {
         "status": "success",
         "action": inserted.data[0] if inserted.data else row,
     }
+
+
 @router.get("/watchlist")
 def get_watchlist():
     supabase = get_supabase_admin()
@@ -368,9 +487,9 @@ def get_watchlist():
 
     latest_bar_map = {}
     for row in bars:
-        inst_id = row["instrument_id"]
-        if inst_id not in latest_bar_map:
-            latest_bar_map[inst_id] = row
+      inst_id = row["instrument_id"]
+      if inst_id not in latest_bar_map:
+          latest_bar_map[inst_id] = row
 
     watchlist = []
 
@@ -380,25 +499,25 @@ def get_watchlist():
         if not latest:
             continue
 
-        close = float(latest["close"]) if latest["close"] is not None else None
-        breakout = snap["breakout_20_high_prev"]
-        sma_50 = snap["sma_50"]
-        momentum = snap["momentum_20d"]
-        volume_avg_20 = snap["volume_avg_20"]
-        latest_volume = float(latest["volume"]) if latest["volume"] is not None else 0
+        close = _safe_float(latest.get("close"))
+        breakout = _safe_float(snap.get("breakout_20_high_prev"))
+        sma_50 = _safe_float(snap.get("sma_50"))
+        momentum = _safe_float(snap.get("momentum_20d"))
+        volume_avg_20 = _safe_float(snap.get("volume_avg_20"))
+        latest_volume = _safe_float(latest.get("volume")) or 0
 
         if close is None or breakout is None:
             continue
 
-        distance_pct = round(((close / float(breakout)) - 1) * 100, 2)
+        distance_pct = round(((close / breakout) - 1) * 100, 2)
 
         vol_ratio = None
         if volume_avg_20 not in (None, 0):
-            vol_ratio = round(latest_volume / float(volume_avg_20), 2)
+            vol_ratio = round(latest_volume / volume_avg_20, 2)
 
-        is_near_breakout = close >= float(breakout) * 0.97
-        trend_ok = sma_50 is not None and close > float(sma_50)
-        momentum_ok = momentum is not None and float(momentum) > -2.0
+        is_near_breakout = close >= breakout * 0.97
+        trend_ok = sma_50 is not None and close > sma_50
+        momentum_ok = momentum is not None and momentum > -2.0
 
         if is_near_breakout and (trend_ok or momentum_ok):
             watchlist.append(
@@ -406,7 +525,7 @@ def get_watchlist():
                     "symbol": symbol_map.get(inst_id),
                     "trade_date": snap["trade_date"],
                     "close": round(close, 2),
-                    "breakout_20_high_prev": float(breakout),
+                    "breakout_20_high_prev": breakout,
                     "distance_to_breakout_pct": distance_pct,
                     "sma_50": sma_50,
                     "momentum_20d": momentum,
@@ -417,6 +536,5 @@ def get_watchlist():
                 }
             )
 
-    watchlist.sort(key=lambda x: x["distance_to_breakout_pct"], reverse=True)
-
+    watchlist.sort(key=lambda x: abs(x["distance_to_breakout_pct"]))
     return watchlist

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase";
-import { Sidebar } from "@/components/sidebar";
+import Sidebar from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 
 export default function ProtectedLayout({

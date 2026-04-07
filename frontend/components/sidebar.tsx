@@ -2,44 +2,57 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  BarChart3,
+  Bell,
+  Briefcase,
+  LayoutDashboard,
+  ListChecks,
+  Radar,
+} from "lucide-react";
 
-const items = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/signals", label: "Signals" },
-  { href: "/alerts", label: "Alerts" },
-  { href: "/brokers", label: "Brokers" },
-  { href: "/logs", label: "Logs" },
-  { href: "/settings", label: "Settings" },
+const navItems = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Recommendations", href: "/recommendations", icon: Radar },
+  { label: "Watchlist", href: "/watchlist", icon: ListChecks },
+  { label: "Signals", href: "/signals", icon: BarChart3 },
+  { label: "Portfolio", href: "/portfolio", icon: Briefcase },
+  { label: "Alerts", href: "/alerts", icon: Bell },
 ];
 
-export function Sidebar() {
+export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 border-r border-slate-200 bg-white p-5">
-      <div className="mb-8">
-        <p className="text-xs uppercase tracking-wide text-slate-500">
-          Personal Trading App
+    <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
+      <div className="border-b border-slate-200 px-6 py-5">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          Swingbuddy
         </p>
-        <h1 className="mt-1 text-lg font-semibold">Control Room</h1>
+        <h1 className="mt-1 text-lg font-semibold text-slate-900">
+          Trading Intelligence
+        </h1>
       </div>
 
-      <nav className="space-y-2">
-        {items.map((item) => {
-          const active = pathname === item.href;
+      <nav className="flex-1 space-y-1 p-4">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const active =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`block rounded-xl px-3 py-2 text-sm ${
+              className={[
+                "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
                 active
                   ? "bg-slate-900 text-white"
-                  : "text-slate-700 hover:bg-slate-100"
-              }`}
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              ].join(" ")}
             >
-              {item.label}
+              <Icon className="h-4 w-4" />
+              <span>{item.label}</span>
             </Link>
           );
         })}
