@@ -57,7 +57,7 @@ export default function BrokersPage() {
   async function connectZerodha() {
     try {
       setConnecting(true);
-      const result = await startZerodhaAuth();
+      const result = (await startZerodhaAuth()) as { login_url?: string };
 
       if (result?.login_url) {
         window.location.href = result.login_url;
