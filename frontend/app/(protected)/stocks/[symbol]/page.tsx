@@ -255,18 +255,18 @@ export default function StockDetailPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="label" minTickGap={24} />
-                    <YAxis domain={["auto", "auto"]} />
-                    <Tooltip
-                      formatter={(value: number) => [formatPrice(value), "Close"]}
-                      labelFormatter={(label) => `Date: ${label}`}
-                    />
-                    {watchlistItem?.breakout_20_high_prev !== undefined ? (
-                      <ReferenceLine
-                        y={watchlistItem.breakout_20_high_prev}
-                        stroke="orange"
-                        strokeDasharray="4 4"
-                        label="Breakout"
+			<XAxis dataKey="label" minTickGap={24} />
+			<YAxis domain={["auto", "auto"]} />
+			<Tooltip
+ 			 formatter={(value) => [formatPrice(Number(value)), "Close"]}
+ 			 labelFormatter={(label) => `Date: ${label}`}
+			/>
+			{watchlistItem?.breakout_20_high_prev !== undefined ? (
+			  <ReferenceLine
+ 			   y={watchlistItem.breakout_20_high_prev}
+   			 stroke="orange"
+   			 strokeDasharray="4 4"
+   			 label="Breakout"
                       />
                     ) : null}
                     {recommendation?.entry_price !== undefined ? (
