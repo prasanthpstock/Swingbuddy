@@ -1,4 +1,64 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { getAlerts } from "@/lib/api";
-export default function AlertsPage() { const [alerts, setAlerts] = useState<any[]>([]); useEffect(() => { getAlerts().then(setAlerts); }, []); return (<div className="card"><h3 className="text-lg font-semibold">Alerts Center</h3><div className="mt-4 overflow-auto"><table className="min-w-full text-left text-sm"><thead className="text-slate-500"><tr><th className="pb-3">Type</th><th className="pb-3">Symbol</th><th className="pb-3">Message</th><th className="pb-3">Status</th></tr></thead><tbody>{alerts.map((alert) => (<tr key={alert.id} className="border-t border-slate-200"><td className="py-3">{alert.alert_type}</td><td className="py-3">{alert.symbol || "-"}</td><td className="py-3">{alert.message}</td><td className="py-3">{alert.status}</td></tr>))}</tbody></table>{alerts.length === 0 ? <p className="subtle mt-4">No alerts yet.</p> : null}</div></div>); }
+
+type AlertItem = {
+  id: string | number;
+  alert_type?: string;
+  symbol?: string;
+  message?: string;
+  status?: string;
+};
+
+export default function AlertsPage() {
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+
+  useEffect(() => {
+    async function loadAlerts() {
+      try {
+        const data = await getAlerts();
+        setAlerts(Array.isArray(data) ? (data as AlertItem[]) : []);
+      } catch (error) {
+        console.error("Failed to load alerts", error);
+        setAlerts([]);
+      }
+    }
+
+    loadAlerts();
+  }, []);
+
+  return (
+    <div className="card">
+      <h3 className="text-lg font-semibold">Alerts Center</h3>
+
+      <div className="mt-4 overflow-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="pb-3">Type</th>
+              <th className="pb-3">Symbol</th>
+              <th className="pb-3">Message</th>
+              <th className="pb-3">Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {alerts.map((alert) => (
+              <tr key={alert.id} className="border-t border-slate-200">
+                <td className="py-3">{alert.alert_type || "-"}</td>
+                <td className="py-3">{alert.symbol || "-"}</td>
+                <td className="py-3">{alert.message || "-"}</td>
+                <td className="py-3">{alert.status || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {alerts.length === 0 ? (
+          <p className="subtle mt-4">No alerts yet.</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
