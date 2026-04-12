@@ -56,6 +56,15 @@ export type IndicatorSnapshot = {
   momentum_20d?: number;
 };
 
+export type StockBar = {
+  trade_date: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  volume?: number;
+};
+
 type ListResponse<T> = T[] | { items?: T[]; count?: number; generated_at?: string };
 
 async function getAuthHeaders() {
@@ -246,4 +255,11 @@ export async function getIndicatorsList(params?: {
 
 export async function syncMarketData(body?: Record<string, unknown>) {
   return apiPost("/api/v2/market-data/sync", body ?? {});
+}
+
+export async function getStockBars(symbol: string, limit = 60) {
+  return apiGet<StockBar[]>(
+    `/api/v2/stocks/${encodeURIComponent(symbol)}/bars`,
+    { limit }
+  );
 }

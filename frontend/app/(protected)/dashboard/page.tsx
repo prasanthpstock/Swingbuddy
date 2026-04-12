@@ -187,9 +187,14 @@ export default function DashboardPage() {
           {recommendations.length === 0 && closestWatchlistCandidate ? (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
               Market Insight: No confirmed breakouts today.{" "}
-              <span className="font-semibold">
+              <Link
+                href={`/stocks/${encodeURIComponent(
+                  closestWatchlistCandidate.symbol
+                )}`}
+                className="font-semibold underline-offset-2 hover:underline"
+              >
                 {closestWatchlistCandidate.symbol}
-              </span>{" "}
+              </Link>{" "}
               is currently the closest to a potential breakout.
             </div>
           ) : null}
@@ -200,7 +205,14 @@ export default function DashboardPage() {
               <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xl font-semibold text-slate-900">
-                    {closestWatchlistCandidate.symbol}
+                    <Link
+                      href={`/stocks/${encodeURIComponent(
+                        closestWatchlistCandidate.symbol
+                      )}`}
+                      className="hover:underline"
+                    >
+                      {closestWatchlistCandidate.symbol}
+                    </Link>
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
                     {formatPercent(
@@ -258,9 +270,14 @@ export default function DashboardPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-xl font-semibold text-slate-900">
-                        {bestPick.symbol}
+                        <Link
+                          href={`/stocks/${encodeURIComponent(bestPick.symbol)}`}
+                          className="hover:underline"
+                        >
+                          {bestPick.symbol}
+                        </Link>
                       </div>
-                      <div className="mt-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
                         <span
                           className={`rounded px-2 py-1 text-xs font-medium ${getSignalBadgeClasses(
                             bestPick.signal_type
@@ -268,6 +285,12 @@ export default function DashboardPage() {
                         >
                           {(bestPick.signal_type || "WATCH").toUpperCase()}
                         </span>
+
+                        {bestPick.score !== undefined && bestPick.score >= 75 ? (
+                          <span className="inline-block rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                            High Conviction
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 
@@ -340,9 +363,12 @@ export default function DashboardPage() {
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-3">
-                          <div className="font-semibold text-slate-900">
+                          <Link
+                            href={`/stocks/${encodeURIComponent(item.symbol)}`}
+                            className="font-semibold text-slate-900 hover:underline"
+                          >
                             {item.symbol}
-                          </div>
+                          </Link>
                           <span
                             className={`rounded px-2 py-1 text-xs font-medium ${getSignalBadgeClasses(
                               item.signal_type
@@ -429,7 +455,12 @@ export default function DashboardPage() {
                         className="border-t border-slate-200"
                       >
                         <td className="p-3 font-medium text-slate-900">
-                          {item.symbol}
+                          <Link
+                            href={`/stocks/${encodeURIComponent(item.symbol)}`}
+                            className="hover:underline"
+                          >
+                            {item.symbol}
+                          </Link>
                         </td>
                         <td className="p-3 text-slate-700">
                           {formatPrice(item.close)}

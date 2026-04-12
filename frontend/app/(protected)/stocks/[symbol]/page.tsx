@@ -1,14 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ReferenceLine,
+} from "recharts";
 import {
   getIndicatorsList,
   getRecommendationsList,
+  getStockBars,
   getWatchlistList,
   type IndicatorSnapshot,
   type Recommendation,
+  type StockBar,
   type WatchlistItem,
 } from "@/lib/api";
 
@@ -26,15 +38,69 @@ function formatNumber(value?: number, digits = 2) {
   return Number(value).toFixed(digits);
 }
 
-function signalClasses(signalType?: string) {
+function getSignalClasses(signalType?: string) {
   const key = (signalType || "watch").toLowerCase();
+
   const styles: Record<string, string> = {
     buy: "bg-green-100 text-green-700",
     breakout: "bg-blue-100 text-blue-700",
     watch: "bg-amber-100 text-amber-700",
     avoid: "bg-red-100 text-red-700",
   };
+
   return styles[key] || "bg-slate-100 text-slate-700";
+}
+
+function getScoreClasses(score?: number) {
+  const s = score ?? 0;
+  if (s >= 75) return "text-green-600";
+  if (s >= 60) return "text-amber-600";
+  return "text-slate-900";
+}
+
+function getDistanceClasses(distance?: number) {
+  const absDistance = Math.abs(distance ?? 999);
+  if (absDistance < 1) return "text-green-600";
+  if (absDistance < 2) return "text-amber-600";
+  return "text-slate-900";
+}
+
+function buildActionPlan(
+  recommendation?: Recommendation,
+  watchlistItem?: WatchlistItem
+) {
+  if (recommendation) {
+    return {
+      title: "Trade Setup Ready",
+      body: `Watch for confirmation around ${formatPrice(
+        recommendation.entry_price
+      )}. Risk is defined at ${formatPrice(
+        recommendation.stop_loss
+      )} with an upside objective near ${formatPrice(
+        recommendation.target_price
+      )}.`,
+    };
+  }
+
+  if (watchlistItem) {
+    return {
+      title: "Watchlist Candidate",
+      body: `${watchlistItem.symbol} is near its breakout zone. Monitor price behavior around ${formatPrice(
+        watchlistItem.breakout_20_high_prev
+      )} and confirm with momentum and volume before acting.`,
+    };
+  }
+
+  return {
+    title: "No Active Setup",
+    body: "This stock does not currently have a recommendation or watchlist setup for today.",
+  };
+}
+
+function formatChartDate(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
 export default function StockDetailPage() {
@@ -44,21 +110,24 @@ export default function StockDetailPage() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [indicators, setIndicators] = useState<IndicatorSnapshot[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [bars, setBars] = useState<StockBar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   async function load() {
     try {
       setError("");
-      const [recData, indicatorData, watchlistData] = await Promise.all([
+      const [recData, indicatorData, watchlistData, barData] = await Promise.all([
         getRecommendationsList(),
         getIndicatorsList(),
         getWatchlistList(),
+        getStockBars(symbol, 60),
       ]);
 
       setRecommendations(recData);
       setIndicators(indicatorData);
       setWatchlist(watchlistData);
+      setBars(barData);
     } catch (err) {
       console.error("Failed to load stock detail", err);
       setError("Failed to load stock detail");
@@ -83,9 +152,19 @@ export default function StockDetailPage() {
     return watchlist.find((item) => item.symbol?.toUpperCase() === symbol);
   }, [watchlist, symbol]);
 
+  const actionPlan = buildActionPlan(recommendation, watchlistItem);
+
+  const chartData = useMemo(() => {
+    return bars.map((bar) => ({
+      trade_date: bar.trade_date,
+      label: formatChartDate(bar.trade_date),
+      close: bar.close ?? null,
+    }));
+  }, [bars]);
+
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <Link
             href="/recommendations"
@@ -95,19 +174,27 @@ export default function StockDetailPage() {
           </Link>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">{symbol}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Indicator snapshot, recommendation, and watchlist context.
+            Recommendation, watchlist context, and indicator snapshot.
           </p>
         </div>
 
-        {recommendation ? (
-          <span
-            className={`rounded px-3 py-1 text-sm font-medium ${signalClasses(
-              recommendation.signal_type
-            )}`}
-          >
-            {(recommendation.signal_type || "WATCH").toUpperCase()}
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {recommendation ? (
+            <span
+              className={`rounded px-3 py-1 text-sm font-medium ${getSignalClasses(
+                recommendation.signal_type
+              )}`}
+            >
+              {(recommendation.signal_type || "WATCH").toUpperCase()}
+            </span>
+          ) : null}
+
+          {recommendation?.score !== undefined && recommendation.score >= 75 ? (
+            <span className="rounded bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
+              High Conviction
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {error ? (
@@ -125,7 +212,11 @@ export default function StockDetailPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-sm text-slate-500">Recommendation Score</p>
-              <p className="mt-2 text-3xl font-semibold text-slate-900">
+              <p
+                className={`mt-2 text-3xl font-semibold ${getScoreClasses(
+                  recommendation?.score
+                )}`}
+              >
                 {recommendation?.score ?? "-"}
               </p>
             </div>
@@ -151,6 +242,81 @@ export default function StockDetailPage() {
               </p>
             </div>
           </div>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Price Trend</h2>
+
+            {chartData.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500">
+                No recent price bars available for this symbol.
+              </p>
+            ) : (
+              <div className="mt-4 h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" minTickGap={24} />
+                    <YAxis domain={["auto", "auto"]} />
+                    <Tooltip
+                      formatter={(value: number) => [formatPrice(value), "Close"]}
+                      labelFormatter={(label) => `Date: ${label}`}
+                    />
+                    {watchlistItem?.breakout_20_high_prev !== undefined ? (
+                      <ReferenceLine
+                        y={watchlistItem.breakout_20_high_prev}
+                        stroke="orange"
+                        strokeDasharray="4 4"
+                        label="Breakout"
+                      />
+                    ) : null}
+                    {recommendation?.entry_price !== undefined ? (
+                      <ReferenceLine
+                        y={recommendation.entry_price}
+                        stroke="blue"
+                        strokeDasharray="4 4"
+                        label="Entry"
+                      />
+                    ) : null}
+                    {recommendation?.target_price !== undefined ? (
+                      <ReferenceLine
+                        y={recommendation.target_price}
+                        stroke="green"
+                        strokeDasharray="4 4"
+                        label="Target"
+                      />
+                    ) : null}
+                    {recommendation?.stop_loss !== undefined ? (
+                      <ReferenceLine
+                        y={recommendation.stop_loss}
+                        stroke="red"
+                        strokeDasharray="4 4"
+                        label="Stop"
+                      />
+                    ) : null}
+                    <Line
+                      type="monotone"
+                      dataKey="close"
+                      stroke="#0f172a"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Action Plan</h2>
+            <div className="mt-4 rounded-xl bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-900">
+                {actionPlan.title}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {actionPlan.body}
+              </p>
+            </div>
+          </section>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -222,7 +388,11 @@ export default function StockDetailPage() {
                   </div>
                   <div>
                     <div className="text-sm text-slate-500">Distance to Breakout</div>
-                    <div className="mt-1 font-medium text-slate-900">
+                    <div
+                      className={`mt-1 font-medium ${getDistanceClasses(
+                        watchlistItem.distance_to_breakout_pct
+                      )}`}
+                    >
                       {formatNumber(watchlistItem.distance_to_breakout_pct)}%
                     </div>
                   </div>

@@ -224,7 +224,6 @@ def generate_recommendations():
     instruments_seen = 0
     snapshots_upserted = 0
 
-    # optional cleanup for reruns on same day
     supabase.table("recommendations").delete().eq("trade_date", run_date).eq(
         "strategy_code", "breakout_v2"
     ).execute()
@@ -419,6 +418,47 @@ def list_indicators():
     ]
 
 
+@router.get("/stocks/{symbol}/bars")
+def get_stock_bars(symbol: str, limit: int = 60):
+    supabase = get_supabase_admin()
+
+    instrument_rows = (
+        supabase.table("instruments")
+        .select("id,symbol")
+        .eq("symbol", symbol.upper())
+        .limit(1)
+        .execute()
+    ).data or []
+
+    if not instrument_rows:
+        raise HTTPException(status_code=404, detail="Symbol not found")
+
+    instrument_id = instrument_rows[0]["id"]
+
+    rows = (
+        supabase.table("daily_bars")
+        .select("trade_date,open,high,low,close,volume")
+        .eq("instrument_id", instrument_id)
+        .order("trade_date", desc=True)
+        .limit(limit)
+        .execute()
+    ).data or []
+
+    rows.reverse()
+
+    return [
+        {
+            "trade_date": row["trade_date"],
+            "open": _safe_float(row.get("open")),
+            "high": _safe_float(row.get("high")),
+            "low": _safe_float(row.get("low")),
+            "close": _safe_float(row.get("close")),
+            "volume": _safe_int(row.get("volume")),
+        }
+        for row in rows
+    ]
+
+
 @router.post("/recommendations/{recommendation_id}/actions")
 def create_recommendation_action(recommendation_id: str, payload: dict):
     supabase = get_supabase_admin()
@@ -487,9 +527,9 @@ def get_watchlist():
 
     latest_bar_map = {}
     for row in bars:
-      inst_id = row["instrument_id"]
-      if inst_id not in latest_bar_map:
-          latest_bar_map[inst_id] = row
+        inst_id = row["instrument_id"]
+        if inst_id not in latest_bar_map:
+            latest_bar_map[inst_id] = row
 
     watchlist = []
 
