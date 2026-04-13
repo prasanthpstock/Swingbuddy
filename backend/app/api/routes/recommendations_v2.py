@@ -442,7 +442,7 @@ def get_top_picks():
     rows = (
         supabase.table("recommendations")
         .select(
-            "id,trade_date,signal_type,score,entry_price,stop_loss,target_price,position_qty,instrument_id"
+            "id,trade_date,signal_type,score,entry_price,stop_loss,target_price,position_qty,instrument_id,rationale"
         )
         .eq("trade_date", run_date)
         .eq("strategy_code", "breakout_v2")
@@ -460,9 +460,9 @@ def get_top_picks():
     enriched = []
 
     for row in rows:
-        entry = row.get("entry_price")
-        stop = row.get("stop_loss")
-        target = row.get("target_price")
+        entry = _safe_float(row.get("entry_price"))
+        stop = _safe_float(row.get("stop_loss"))
+        target = _safe_float(row.get("target_price"))
 
         if not entry or not stop or not target:
             continue
@@ -474,14 +474,24 @@ def get_top_picks():
             continue
 
         risk_pct = (risk / entry) * 100
+        reward_pct = (reward / entry) * 100
         risk_reward = reward / risk
 
-        if row["score"] < 75:
+        # 🔥 RELAXED FILTERS (important)
+        if row["score"] < 70:
             continue
-        if risk_reward < 1.5:
+        if risk_reward < 1.3:
             continue
-        if risk_pct > 3:
+        if risk_pct > 4:
             continue
+
+        # Add reason
+        if row["score"] >= 80:
+            reason = "High score with strong setup"
+        elif row["signal_type"] == "BREAKOUT":
+            reason = "Breakout setup with momentum"
+        else:
+            reason = "Low risk buy setup"
 
         enriched.append(
             {
@@ -493,9 +503,11 @@ def get_top_picks():
                 "stop_loss": stop,
                 "target_price": target,
                 "risk_pct": round(risk_pct, 2),
-                "reward_pct": round((reward / entry) * 100, 2),
+                "reward_pct": round(reward_pct, 2),
                 "risk_reward": round(risk_reward, 2),
                 "position_qty": row.get("position_qty"),
+                "rationale": row.get("rationale"),
+                "top_pick_reason": reason,
             }
         )
 
@@ -508,7 +520,6 @@ def get_top_picks():
         "count": len(enriched[:3]),
         "items": enriched[:3],
     }
-
 @router.get("/indicators")
 def list_indicators():
     supabase = get_supabase_admin()
