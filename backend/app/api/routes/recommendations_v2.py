@@ -482,7 +482,7 @@ def get_top_picks():
             continue
         if risk_reward < 1.3:
             continue
-        if risk_pct > 4:
+        if risk_pct > 5:
             continue
 
         # Add reason
