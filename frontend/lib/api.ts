@@ -263,3 +263,8 @@ export async function getStockBars(symbol: string, limit = 60) {
     { limit }
   );
 }
+
+export async function getTopPicks() {
+  const res = await fetch(`${API_BASE_URL}/api/v2/top-picks`);
+  return res.json();
+}
